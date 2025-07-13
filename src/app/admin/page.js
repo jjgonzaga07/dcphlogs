@@ -377,9 +377,10 @@ export default function AdminPage() {
                       <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
                         {log.OUTstatus ? (
                           <span className={`px-2 py-1 rounded-full text-xs font-semibold
+                            ${log.OUTstatus === 'Missed' ? 'bg-red-600 text-white' : ''}
                             ${log.OUTstatus === 'Late out' ? 'bg-red-100 text-red-800' : ''}
                             ${log.OUTstatus === '' ? 'bg-gray-100 text-gray-600' : ''}
-                            ${log.OUTstatus !== 'Late out' && log.OUTstatus !== '' ? 'bg-green-100 text-green-800' : ''}
+                            ${log.OUTstatus !== 'Late out' && log.OUTstatus !== '' && log.OUTstatus !== 'Missed' ? 'bg-green-100 text-green-800' : ''}
                           `}>
                             {log.OUTstatus}
                           </span>
