@@ -21,6 +21,13 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+// Set persistence to LOCAL to maintain auth state across page refreshes
+if (typeof window !== 'undefined') {
+  import('firebase/auth').then(({ setPersistence, browserLocalPersistence }) => {
+    setPersistence(auth, browserLocalPersistence);
+  });
+}
+
 // Initialize Analytics only on client side
 let analytics = null;
 if (typeof window !== 'undefined') {

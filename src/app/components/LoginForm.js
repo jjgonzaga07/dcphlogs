@@ -65,6 +65,7 @@ export default function LoginForm() {
       // Store user info in localStorage
       localStorage.setItem('user', JSON.stringify({
         email: user.email,
+        uid: user.uid,
         type,
         isAuthenticated: true
       }));
@@ -105,10 +106,19 @@ export default function LoginForm() {
 
   return (
     <>
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8">
-          <div>
-            <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white to-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-8 animate-fade-in">
+          <div className="animate-slide-in-left">
+            <div className="flex justify-center">
+              <div className="w-20 h-20 mb-4 hover-scale">
+                <img 
+                  src="/images/logo.PNG" 
+                  alt="DCPH Logo" 
+                  className="w-full h-full object-contain"
+                />
+              </div>
+            </div>
+            <h2 className="mt-6 text-center text-3xl font-extrabold text-[#14206e]">
               Sign in to your account
             </h2>
             <p className="mt-2 text-center text-sm text-gray-600">
@@ -116,11 +126,11 @@ export default function LoginForm() {
             </p>
           </div>
           
-          <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-            <div className="rounded-md shadow-sm -space-y-px">
+          <form className="mt-8 space-y-6 animate-slide-in-right" onSubmit={handleSubmit}>
+            <div className="space-y-4">
               {/* Email Field */}
-              <div>
-                <label htmlFor="email" className="sr-only">
+              <div className="hover-lift">
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                   Email address
                 </label>
                 <input
@@ -128,16 +138,16 @@ export default function LoginForm() {
                   name="email"
                   type="email"
                   required
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                  placeholder="Email address"
+                  className="appearance-none relative block w-full px-4 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#14206e] focus:border-[#14206e] focus:z-10 sm:text-sm transition-all duration-200"
+                  placeholder="Enter your email"
                   value={formData.email}
                   onChange={handleInputChange}
                 />
               </div>
               
               {/* Password Field */}
-              <div>
-                <label htmlFor="password" className="sr-only">
+              <div className="hover-lift">
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
                   Password
                 </label>
                 <input
@@ -145,8 +155,8 @@ export default function LoginForm() {
                   name="password"
                   type="password"
                   required
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                  placeholder="Password"
+                  className="appearance-none relative block w-full px-4 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#14206e] focus:border-[#14206e] focus:z-10 sm:text-sm transition-all duration-200"
+                  placeholder="Enter your password"
                   value={formData.password}
                   onChange={handleInputChange}
                 />
@@ -154,7 +164,7 @@ export default function LoginForm() {
             </div>
 
             {error && (
-              <div className="text-red-600 text-sm text-center">
+              <div className="text-red-600 text-sm text-center bg-red-50 p-3 rounded-lg border border-red-200 animate-fade-in">
                 {error}
               </div>
             )}
@@ -163,7 +173,7 @@ export default function LoginForm() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-[#14206e] hover:bg-[#1a2a8a] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#14206e] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover-lift"
               >
                 {isLoading ? (
                   <div className="flex items-center">
@@ -184,27 +194,19 @@ export default function LoginForm() {
 
       {/* Success Modal */}
       {showSuccessModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3 text-center">
-              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
-                <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                </svg>
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mt-4">
-                Login Successful!
-              </h3>
-              <div className="mt-2 px-7 py-3">
-                <p className="text-sm text-gray-500">
-                  Welcome back! You will be redirected to your dashboard shortly.
-                </p>
-              </div>
-              <div className="items-center px-4 py-3">
-                <div className="flex justify-center">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600"></div>
-                </div>
-              </div>
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center h-full w-full z-50 animate-fade-in">
+          <div className="flex flex-col items-center justify-center bg-white rounded-xl shadow-lg p-10 animate-slide-in-left">
+            <div className="w-24 h-24 mb-6">
+              <img 
+                src="/images/logo.PNG" 
+                alt="DCPH Logo" 
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <h2 className="text-2xl font-bold text-[#14206e] mb-2 text-center">DCPH: Anime and Manga</h2>
+            <p className="text-gray-700 text-center mb-6">Please wait for us to redirect you to the Clocking Log Form.</p>
+            <div className="flex justify-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#14206e]"></div>
             </div>
           </div>
         </div>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '../../configs/firebaseConfigs';
-import { doc, setDoc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { query, where, orderBy, limit, getDocs, collection, doc, setDoc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 
 export default function LogPage() {
   const [user, setUser] = useState(null);
@@ -11,6 +11,13 @@ export default function LogPage() {
   const [currentTime, setCurrentTime] = useState('');
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [currentClockInId, setCurrentClockInId] = useState(null);
+  const [userName, setUserName] = useState('');
+  const [isClockInLoading, setIsClockInLoading] = useState(false);
+  const [isClockOutLoading, setIsClockOutLoading] = useState(false);
+  const [showSauceNAOModal, setShowSauceNAOModal] = useState(false);
+  const [imageUrl, setImageUrl] = useState('');
+  const [sauceNAOResults, setSauceNAOResults] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -29,6 +36,38 @@ export default function LogPage() {
 
     setUser(userInfo);
     setIsLoading(false);
+
+    // Ensure clocklog subcollection exists
+    (async () => {
+      let userUid = null;
+      if (auth.currentUser) {
+        userUid = auth.currentUser.uid;
+      } else {
+        userUid = userInfo.email.replace('@', '_at_').replace('.', '_dot_');
+      }
+      const userDocRef = doc(db, 'users', userUid);
+      const clocklogRef = collection(userDocRef, 'clocklog');
+      const snapshot = await getDocs(clocklogRef);
+      if (snapshot.empty) {
+        await setDoc(doc(clocklogRef, 'init'), { initialized: true });
+      }
+    })();
+
+    // Fetch user's name from Firestore
+    (async () => {
+      let userUid = null;
+      if (auth.currentUser) {
+        userUid = auth.currentUser.uid;
+      } else {
+        userUid = userInfo.email.replace('@', '_at_').replace('.', '_dot_');
+      }
+      const userDocRef = doc(db, 'users', userUid);
+      const userDocSnap = await getDoc(userDocRef);
+      if (userDocSnap.exists()) {
+        const data = userDocSnap.data();
+        setUserName(data.name || '');
+      }
+    })();
   }, [router]);
 
   // Update time every second
@@ -60,34 +99,27 @@ export default function LogPage() {
 
   const checkClockInStatus = async () => {
     try {
-      // Get the user UID from Firebase Auth or use a fallback
       let userUid = null;
-      
       if (auth.currentUser) {
         userUid = auth.currentUser.uid;
       } else {
-        // If auth.currentUser is not available, we'll need to get the UID differently
-        // For now, let's use the email as a fallback (not ideal but will work for testing)
         userUid = user.email.replace('@', '_at_').replace('.', '_dot_');
       }
-
       const userDocRef = doc(db, 'users', userUid);
       const clocklogRef = collection(userDocRef, 'clocklog');
-      
-      // Get today's date in YYYY-MM-DD format
-      const today = new Date().toISOString().split('T')[0];
-      
-      // Check if there's an active clock in (no clock out for today)
-      const querySnapshot = await getDoc(userDocRef);
-      if (querySnapshot.exists()) {
-        // This is a simplified check - in a real app you'd query the clocklog subcollection
-        // For now, we'll use localStorage to track clock in status
-        const clockStatus = localStorage.getItem(`clockIn_${userUid}_${today}`);
-        if (clockStatus) {
-          const status = JSON.parse(clockStatus);
-          setIsClockedIn(status.isClockedIn);
-          setCurrentClockInId(status.clockInId);
-        }
+
+      // Query for the latest clocklog where clockOut is null
+      const q = query(clocklogRef, where('clockOut', '==', null), orderBy('clockIn', 'desc'), limit(1));
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        // There is an active clock-in session
+        const docSnap = querySnapshot.docs[0];
+        setIsClockedIn(true);
+        setCurrentClockInId(docSnap.id);
+      } else {
+        setIsClockedIn(false);
+        setCurrentClockInId(null);
       }
     } catch (error) {
       console.error('Error checking clock in status:', error);
@@ -103,6 +135,7 @@ export default function LogPage() {
     }
 
     try {
+      setIsClockInLoading(true);
       console.log('Starting clock in process...');
       console.log('User:', user);
       
@@ -164,10 +197,10 @@ export default function LogPage() {
       console.log('Full path: users/' + userUid + '/clocklog/' + docRef.id);
       
       // Store clock in status in localStorage
-      localStorage.setItem(`clockIn_${userUid}_${today}`, JSON.stringify({
-        isClockedIn: true,
-        clockInId: docRef.id
-      }));
+      // localStorage.setItem(`clockIn_${userUid}_${today}`, JSON.stringify({
+      //   isClockedIn: true,
+      //   clockInId: docRef.id
+      // }));
 
       setIsClockedIn(true);
       setCurrentClockInId(docRef.id);
@@ -181,6 +214,8 @@ export default function LogPage() {
       console.error('Error stack:', error.stack);
       
       alert(`Clock in failed: ${error.message}`);
+    } finally {
+      setIsClockInLoading(false);
     }
   };
 
@@ -191,6 +226,7 @@ export default function LogPage() {
     }
 
     try {
+      setIsClockOutLoading(true);
       // Get the user UID from Firebase Auth or use a fallback
       let userUid = null;
       
@@ -215,7 +251,7 @@ export default function LogPage() {
       }, { merge: true });
 
       // Remove clock in status from localStorage
-      localStorage.removeItem(`clockIn_${userUid}_${today}`);
+      // localStorage.removeItem(`clockIn_${userUid}_${today}`);
 
       setIsClockedIn(false);
       setCurrentClockInId(null);
@@ -224,6 +260,8 @@ export default function LogPage() {
     } catch (error) {
       console.error('Error clocking out:', error);
       alert(`Clock out failed: ${error.message}`);
+    } finally {
+      setIsClockOutLoading(false);
     }
   };
 
@@ -232,10 +270,46 @@ export default function LogPage() {
     router.push('/');
   };
 
+  const handleSauceNAOClick = () => {
+    setShowSauceNAOModal(true);
+    setImageUrl('');
+    setSauceNAOResults(null);
+  };
+
+  const handleSauceNAOSearch = async () => {
+    if (!imageUrl) return;
+    setIsSearching(true);
+    try {
+      const response = await fetch('/api/saucenao/url', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ imageUrl })
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      setSauceNAOResults(data);
+    } catch (error) {
+      console.error('SauceNAO search error:', error);
+      setSauceNAOResults({ error: error.message });
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const closeModal = () => {
+    setShowSauceNAOModal(false);
+    setImageUrl('');
+    setSauceNAOResults(null);
+  };
+
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white to-gray-50">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-[#14206e]"></div>
       </div>
     );
   }
@@ -245,23 +319,40 @@ export default function LogPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-white to-gray-50">
       {/* Header */}
-      <header className="bg-white shadow">
+      <header className="bg-white shadow-lg border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
-            <div className="flex items-center">
-              <h1 className="text-3xl font-bold text-gray-900">
-                User Dashboard
-              </h1>
+            <div className="flex items-center animate-slide-in-left">
+              <div className="w-16 h-16 mr-4">
+                <img 
+                  src="/images/logo.PNG" 
+                  alt="DCPH Logo" 
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-[#14206e]">DCPH: Anime and Manga</h1>
+                <p className="text-sm text-gray-600">User Dashboard</p>
+              </div>
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-4 animate-slide-in-right">
               <span className="text-sm text-gray-600">
-                Welcome, <span className="font-semibold">{user.email}</span>
+                Welcome, <span className="font-semibold text-[#14206e]">{userName || user.email}</span>
               </span>
               <button
+                onClick={handleSauceNAOClick}
+                className="bg-[#14206e] hover:bg-[#1a2a8a] text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover-lift flex items-center"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+                SauceNAO
+              </button>
+              <button
                 onClick={handleLogout}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover-lift"
               >
                 Logout
               </button>
@@ -275,54 +366,106 @@ export default function LogPage() {
         <div className="px-4 py-6 sm:px-0">
           <div className="space-y-6">
             {/* Real-time Clock */}
-            <div className="bg-white shadow rounded-lg p-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Philippines Time</h2>
-              <div className="text-6xl font-mono text-center text-blue-600">
+            <div className="bg-white shadow-lg rounded-xl p-8 hover-lift animate-fade-in">
+              <h2 className="text-2xl font-bold text-[#14206e] mb-6 flex items-center">
+                <svg className="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Philippines Time
+              </h2>
+              <div className="text-6xl font-mono text-center text-[#14206e] animate-pulse-custom">
                 {currentTime}
               </div>
-              <p className="text-center text-gray-500 mt-2">Real-time</p>
+              <p className="text-center text-gray-500 mt-4">Real-time</p>
             </div>
 
             {/* Clock In/Out Section */}
-            <div className="bg-white shadow rounded-lg p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Time Clock</h2>
-              <div className="flex justify-center space-x-4">
+            <div className="bg-white shadow-lg rounded-xl p-8 hover-lift animate-fade-in">
+              <h2 className="text-xl font-semibold text-[#14206e] mb-6 flex items-center">
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Time Clock
+              </h2>
+              <div className="flex justify-center space-x-6">
                 {!isClockedIn ? (
                   <button
                     onClick={handleClockIn}
-                    className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg text-lg font-medium transition-colors"
+                    disabled={isClockInLoading}
+                    className="bg-[#14206e] hover:bg-[#1a2a8a] text-white px-8 py-4 rounded-xl text-lg font-medium transition-all duration-200 hover-lift hover-scale flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Clock In
+                    {isClockInLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                        Clocking In...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                        Clock In
+                      </>
+                    )}
                   </button>
                 ) : (
                   <button
                     onClick={handleClockOut}
-                    className="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-lg text-lg font-medium transition-colors"
+                    disabled={isClockOutLoading}
+                    className="bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-xl text-lg font-medium transition-all duration-200 hover-lift hover-scale flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Clock Out
+                    {isClockOutLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                        Clocking Out...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                        Clock Out
+                      </>
+                    )}
                   </button>
                 )}
               </div>
-              <div className="mt-4 text-center">
-                <p className={`text-lg font-medium ${isClockedIn ? 'text-green-600' : 'text-gray-500'}`}>
-                  {isClockedIn ? 'Currently Clocked In' : 'Not Clocked In'}
+              <div className="mt-6 text-center">
+                <p className={`text-lg font-medium ${isClockedIn ? 'text-green-600' : 'text-gray-500'} flex items-center justify-center`}>
+                  <div className={`w-3 h-3 rounded-full mr-2 ${isClockedIn ? 'bg-green-500 animate-pulse-custom' : 'bg-gray-400'}`}></div>
+                  {isClockInLoading ? 'Clocking In...' : isClockOutLoading ? 'Clocking Out...' : isClockedIn ? 'Currently Clocked In' : 'Not Clocked In'}
                 </p>
               </div>
             </div>
 
             {/* Status Info */}
-            <div className="bg-white shadow rounded-lg p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Today's Status</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h4 className="font-medium text-blue-900">Current Status</h4>
-                  <p className="text-blue-700 text-sm mt-1">
+            <div className="bg-white shadow-lg rounded-xl p-8 hover-lift animate-fade-in">
+              <h3 className="text-lg font-medium text-[#14206e] mb-6 flex items-center">
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Today's Status
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-6 rounded-xl border border-blue-200 hover-lift">
+                  <h4 className="font-medium text-[#14206e] flex items-center">
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Current Status
+                  </h4>
+                  <p className="text-[#14206e] text-sm mt-2">
                     {isClockedIn ? 'Active - Clocked In' : 'Inactive - Not Clocked In'}
                   </p>
                 </div>
-                <div className="bg-green-50 p-4 rounded-lg">
-                  <h4 className="font-medium text-green-900">Session</h4>
-                  <p className="text-green-700 text-sm mt-1">
+                <div className="bg-gradient-to-r from-green-50 to-green-100 p-6 rounded-xl border border-green-200 hover-lift">
+                  <h4 className="font-medium text-[#14206e] flex items-center">
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Session
+                  </h4>
+                  <p className="text-[#14206e] text-sm mt-2">
                     {isClockedIn ? 'Active session in progress' : 'No active session'}
                   </p>
                 </div>
@@ -331,6 +474,230 @@ export default function LogPage() {
           </div>
         </div>
       </main>
+
+      {/* SauceNAO Modal */}
+      {showSauceNAOModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 animate-fade-in">
+          <div className="bg-white rounded-xl shadow-lg p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-[#14206e] flex items-center">
+                <svg className="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+                SauceNAO Image Search
+              </h2>
+              <button
+                onClick={closeModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Image URL
+              </label>
+              <input
+                type="url"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                placeholder="https://example.com/image.jpg"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#14206e] focus:border-[#14206e] transition-all duration-200"
+                style={{ color: '#14206e' }}
+              />
+            </div>
+            {imageUrl && (
+              <div className="mb-6">
+                <button
+                  onClick={handleSauceNAOSearch}
+                  disabled={isSearching}
+                  className="w-full bg-[#14206e] hover:bg-[#1a2a8a] text-white px-6 py-3 rounded-lg font-medium transition-all duration-200 hover-lift disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                >
+                  {isSearching ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                      Searching...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                      </svg>
+                      Search SauceNAO
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+            {/* Results Section */}
+            {sauceNAOResults && (
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-semibold text-[#14206e] mb-4">Search Results</h3>
+                {sauceNAOResults.error ? (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <p className="text-red-600">Error: {sauceNAOResults.error}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Summary Section */}
+                    {sauceNAOResults.results && sauceNAOResults.results.length > 0 && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                        <h4 className="font-semibold text-[#14206e] mb-2">📺 Episode & Series Summary</h4>
+                        {(() => {
+                          const bestResult = sauceNAOResults.results[0];
+                          const data = bestResult.data;
+                          return (
+                            <div className="space-y-1">
+                              {data.source && (
+                                <p className="text-sm font-medium" style={{ color: '#14206e' }}>
+                                  <span className="font-bold">Series:</span> {data.source}
+                                </p>
+                              )}
+                              {data.title && (
+                                <p className="text-sm font-medium" style={{ color: '#14206e' }}>
+                                  <span className="font-bold">Title:</span> {data.title}
+                                </p>
+                              )}
+                              {(data.part || data.episode) && (
+                                <p className="text-sm font-medium" style={{ color: '#14206e' }}>
+                                  <span className="font-bold">Episode:</span> {data.part || data.episode}
+                                </p>
+                              )}
+                              {data.character && (
+                                <p className="text-sm font-medium" style={{ color: '#14206e' }}>
+                                  <span className="font-bold">Character:</span> {data.character}
+                                </p>
+                              )}
+                              {data.year && (
+                                <p className="text-sm font-medium" style={{ color: '#14206e' }}>
+                                  <span className="font-bold">Year:</span> {data.year}
+                                </p>
+                              )}
+                              <p className="text-xs mt-2" style={{ color: '#14206e' }}>
+                                Confidence: {bestResult.header.similarity}% | Source: {bestResult.header.index_name}
+                              </p>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                    
+                    {/* Detailed Results */}
+                    {sauceNAOResults.results && sauceNAOResults.results.length > 0 ? (
+                      sauceNAOResults.results.slice(0, 8).map((result, index) => (
+                        <div key={index} className="bg-gray-50 rounded-lg p-4 hover-lift">
+                          <div className="flex items-start space-x-4">
+                            {result.header.thumbnail && (
+                              <img
+                                src={result.header.thumbnail}
+                                alt="Result thumbnail"
+                                className="w-16 h-16 object-cover rounded"
+                              />
+                            )}
+                            <div className="flex-1">
+                              <h4 className="font-medium text-[#14206e]">
+                                {result.header.index_name || 'Unknown Source'}
+                              </h4>
+                              <p className="text-sm text-gray-600 mt-1">
+                                Similarity: {result.header.similarity}%
+                              </p>
+                              
+                              {/* Series/Anime Information */}
+                              {result.data && result.data.source && (
+                                <p className="text-sm text-gray-700 mt-1 font-semibold">
+                                  Series: {result.data.source}
+                                </p>
+                              )}
+                              {result.data && result.data.title && (
+                                <p className="text-sm text-gray-700 mt-1">
+                                  Title: {result.data.title}
+                                </p>
+                              )}
+                              
+                              {/* Episode Information */}
+                              {result.data && result.data.part && (
+                                <p className="text-sm text-blue-600 font-medium mt-1">
+                                  Episode: {result.data.part}
+                                </p>
+                              )}
+                              {result.data && result.data.episode && (
+                                <p className="text-sm text-blue-600 font-medium mt-1">
+                                  Episode: {result.data.episode}
+                                </p>
+                              )}
+                              
+                              {/* Movie Information */}
+                              {result.data && result.data.year && (
+                                <p className="text-sm text-green-600 font-medium mt-1">
+                                  Year: {result.data.year}
+                                </p>
+                              )}
+                              
+                              {/* Character Information */}
+                              {result.data && result.data.character && (
+                                <p className="text-sm text-purple-600 font-medium mt-1">
+                                  Character: {result.data.character}
+                                </p>
+                              )}
+                              
+                              {/* Artist Information */}
+                              {result.data && result.data.author && (
+                                <p className="text-sm text-gray-700">
+                                  Artist: {result.data.author}
+                                </p>
+                              )}
+                              {result.data && result.data.creator && (
+                                <p className="text-sm text-gray-700">
+                                  Creator: {result.data.creator}
+                                </p>
+                              )}
+                              
+                              {/* Additional Details */}
+                              {result.data && result.data.material && (
+                                <p className="text-sm text-gray-600 mt-1">
+                                  Material: {result.data.material}
+                                </p>
+                              )}
+                              {result.data && result.data.characters && (
+                                <p className="text-sm text-gray-600 mt-1">
+                                  Characters: {result.data.characters}
+                                </p>
+                              )}
+                              
+                              {/* Source Link */}
+                              {result.data && result.data.ext_urls && result.data.ext_urls.length > 0 && (
+                                <a
+                                  href={result.data.ext_urls[0]}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-sm text-[#14206e] hover:underline mt-2 inline-block"
+                                >
+                                  View Source →
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <p className="text-yellow-700">No results found for this image.</p>
+                        {sauceNAOResults.status && (
+                          <p className="text-sm text-gray-600 mt-2">
+                            Status: {sauceNAOResults.status} - {sauceNAOResults.status_message || 'Unknown error'}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
