@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '../../configs/firebaseConfigs';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 export default function LoginForm() {
   const [formData, setFormData] = useState({
@@ -28,49 +28,60 @@ export default function LoginForm() {
     e.preventDefault();
     setError('');
     setIsLoading(true);
-
     try {
-      console.log('Attempting to sign in with:', formData.email);
-      
       // Firebase Auth
       const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
       const user = userCredential.user;
       
-      console.log('Firebase Auth successful, user UID:', user.uid);
-
       // Try to get user type from 'admin' collection
       let type = null;
       let userDocSnap = await getDoc(doc(db, 'admin', user.uid));
+      let isAdmin = false;
+      
       if (userDocSnap.exists()) {
         const data = userDocSnap.data();
         type = data.type || 'admin';
-        console.log('Found user in admin collection, type:', type);
+        isAdmin = true;
       } else {
-        // Try to get user type from 'users' collection
         userDocSnap = await getDoc(doc(db, 'users', user.uid));
         if (userDocSnap.exists()) {
           const data = userDocSnap.data();
           type = data.type || 'user';
-          console.log('Found user in users collection, type:', type);
         }
       }
-
+      
       if (!type) {
-        console.log('User not found in either collection');
         setError('Account type not found. Please contact support.');
         setIsLoading(false);
         return;
       }
-
+      
+      // Update last login timestamp
+      try {
+        const lastLoginTimestamp = serverTimestamp();
+        if (isAdmin) {
+          // Update admin document with last login
+          await setDoc(doc(db, 'admin', user.uid), {
+            lastLogin: lastLoginTimestamp
+          }, { merge: true });
+        } else {
+          // Update user document with last login
+          await setDoc(doc(db, 'users', user.uid), {
+            lastLogin: lastLoginTimestamp
+          }, { merge: true });
+        }
+      } catch (error) {
+        console.error('Error updating last login:', error);
+        // Don't fail the login if last login update fails
+      }
+      
       // Store user info in localStorage
       localStorage.setItem('user', JSON.stringify({
         email: user.email,
+        uid: user.uid,
         type,
         isAuthenticated: true
       }));
-
-      console.log('Login successful, redirecting to:', type === 'admin' ? '/admin' : '/log');
-
       // Show success modal
       setShowSuccessModal(true);
       setTimeout(() => {
@@ -82,11 +93,6 @@ export default function LoginForm() {
         }
       }, 2000);
     } catch (err) {
-      console.error('Login error:', err);
-      console.error('Error code:', err.code);
-      console.error('Error message:', err.message);
-      
-      // More specific error messages
       if (err.code === 'auth/user-not-found') {
         setError('No account found with this email address.');
       } else if (err.code === 'auth/wrong-password') {
@@ -104,111 +110,91 @@ export default function LoginForm() {
   };
 
   return (
-    <>
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8">
-          <div>
-            <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-              Sign in to your account
-            </h2>
-            <p className="mt-2 text-center text-sm text-gray-600">
-              Enter your email and password to continue
-            </p>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white to-[#e6eaff] px-4 py-8">
+      <div className="w-full max-w-md mx-auto bg-white rounded-2xl shadow-2xl p-8 md:p-10 animate-fade-in">
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-20 h-20 mb-4 hover-scale">
+            <img 
+              src="/images/logo.PNG" 
+              alt="DCPH Logo" 
+              className="w-full h-full object-contain rounded-full border-2 border-[#14206e] shadow-md"
+            />
           </div>
-          
-          <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-            <div className="rounded-md shadow-sm -space-y-px">
-              {/* Email Field */}
-              <div>
-                <label htmlFor="email" className="sr-only">
-                  Email address
-                </label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  required
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                  placeholder="Email address"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                />
-              </div>
-              
-              {/* Password Field */}
-              <div>
-                <label htmlFor="password" className="sr-only">
-                  Password
-                </label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                  placeholder="Password"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                />
-              </div>
-            </div>
-
-            {error && (
-              <div className="text-red-600 text-sm text-center">
-                {error}
-              </div>
-            )}
-
-            <div>
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? (
-                  <div className="flex items-center">
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Signing in...
-                  </div>
-                ) : (
-                  'Sign in'
-                )}
-              </button>
-            </div>
-          </form>
+          <h2 className="text-3xl md:text-4xl font-extrabold text-[#14206e] text-center mb-2">Sign in to your account</h2>
+          <p className="text-center text-base text-gray-600">Welcome back! Please enter your credentials.</p>
         </div>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-[#14206e] mb-2">Email address</label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              required
+              className="block w-full px-4 py-3 border border-gray-300 rounded-lg text-[#14206e] placeholder-[#14206e] bg-white focus:outline-none focus:ring-2 focus:ring-[#14206e] focus:border-[#14206e] transition-all duration-200 text-base"
+              placeholder="Enter your email"
+              value={formData.email}
+              onChange={handleInputChange}
+            />
+          </div>
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-[#14206e] mb-2">Password</label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              required
+              className="block w-full px-4 py-3 border border-gray-300 rounded-lg text-[#14206e] placeholder-[#14206e] bg-white focus:outline-none focus:ring-2 focus:ring-[#14206e] focus:border-[#14206e] transition-all duration-200 text-base"
+              placeholder="Enter your password"
+              value={formData.password}
+              onChange={handleInputChange}
+            />
+          </div>
+          {error && (
+            <div className="text-red-600 text-sm text-center bg-red-50 p-3 rounded-lg border border-red-200 animate-fade-in">
+              {error}
+            </div>
+          )}
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full flex justify-center items-center py-3 px-4 border border-transparent text-base font-semibold rounded-lg text-white bg-[#14206e] hover:bg-[#1a2a8a] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#14206e] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover-lift mt-2"
+          >
+            {isLoading ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Signing in...
+              </>
+            ) : (
+              'Sign in'
+            )}
+          </button>
+        </form>
       </div>
-
       {/* Success Modal */}
       {showSuccessModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3 text-center">
-              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
-                <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                </svg>
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mt-4">
-                Login Successful!
-              </h3>
-              <div className="mt-2 px-7 py-3">
-                <p className="text-sm text-gray-500">
-                  Welcome back! You will be redirected to your dashboard shortly.
-                </p>
-              </div>
-              <div className="items-center px-4 py-3">
-                <div className="flex justify-center">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600"></div>
-                </div>
-              </div>
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center h-full w-full z-50 animate-fade-in">
+          <div className="flex flex-col items-center justify-center bg-white rounded-xl shadow-lg p-10 animate-slide-in-left">
+            <div className="w-24 h-24 mb-6">
+              <img 
+                src="/images/logo.PNG" 
+                alt="DCPH Logo" 
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <h2 className="text-2xl font-bold text-[#14206e] mb-2 text-center">DCPH: Anime and Manga</h2>
+            <p className="text-gray-700 text-center mb-6">Please wait for us to redirect you to the dashboard.</p>
+            <div className="flex justify-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#14206e]"></div>
             </div>
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 } 

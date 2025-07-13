@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "firebase": "^11.10.0",
+    "form-data": "^4.0.3",
     "next": "15.3.5",
+    "node-fetch": "^2.7.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
