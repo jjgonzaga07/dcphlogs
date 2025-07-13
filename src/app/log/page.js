@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '../../configs/firebaseConfigs';
 import { query, where, orderBy, limit, getDocs, collection, doc, setDoc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import ModalAlert from '../components/ModalAlert';
 
 export default function LogPage() {
   const [user, setUser] = useState(null);
@@ -18,6 +19,9 @@ export default function LogPage() {
   const [imageUrl, setImageUrl] = useState('');
   const [sauceNAOResults, setSauceNAOResults] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [alertOpen, setAlertOpen] = useState(false);
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState('error');
   const router = useRouter();
 
   useEffect(() => {
@@ -136,6 +140,65 @@ export default function LogPage() {
       // Get the user UID from Firebase Auth or use a fallback
       const userUid = auth.currentUser.uid;
       
+      // Fetch allowed schedule from Firestore
+      const userDocRefSchedule = doc(db, 'users', userUid);
+      const userDocSnapSchedule = await getDoc(userDocRefSchedule);
+      let allowedDay = null, allowedStartTime = null, allowedEndTime = null;
+      if (userDocSnapSchedule.exists()) {
+        const data = userDocSnapSchedule.data();
+        allowedDay = data.allowedDay;
+        allowedStartTime = data.allowedStartTime;
+        allowedEndTime = data.allowedEndTime;
+      }
+      // If not found in users, check admin collection
+      if ((!allowedDay || !allowedStartTime || !allowedEndTime) && user.type === 'admin') {
+        const adminDocRef = doc(db, 'admin', userUid);
+        const adminDocSnap = await getDoc(adminDocRef);
+        if (adminDocSnap.exists()) {
+          const data = adminDocSnap.data();
+          allowedDay = data.allowedDay;
+          allowedStartTime = data.allowedStartTime;
+          allowedEndTime = data.allowedEndTime;
+        }
+      }
+      // Enforce allowed schedule if set
+      if (allowedDay && allowedStartTime && allowedEndTime) {
+        const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+        const now = new Date();
+        const today = daysOfWeek[now.getDay()];
+        const currentTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+        // Calculate time boundaries
+        const [startHour, startMin] = allowedStartTime.split(':').map(Number);
+        const [endHour, endMin] = allowedEndTime.split(':').map(Number);
+        const startDate = new Date(now);
+        startDate.setHours(startHour, startMin - 5, 0, 0); // 5 min early
+        const endDate = new Date(now);
+        endDate.setHours(endHour, endMin, 0, 0);
+        const nowDate = new Date(now);
+        // Only allow clock in from 5 min before start to end time
+        if (today !== allowedDay) {
+          setAlertMessage(`You are only allowed to clock in on ${allowedDay}.`);
+          setAlertType('error');
+          setAlertOpen(true);
+          setIsClockInLoading(false);
+          return;
+        }
+        if (nowDate < startDate) {
+          setAlertMessage(`You can only clock in up to 5 minutes before ${allowedStartTime}. Current time: ${currentTime}`);
+          setAlertType('error');
+          setAlertOpen(true);
+          setIsClockInLoading(false);
+          return;
+        }
+        if (nowDate > endDate) {
+          setAlertMessage(`You can only clock in until ${allowedEndTime}. Current time: ${currentTime}`);
+          setAlertType('error');
+          setAlertOpen(true);
+          setIsClockInLoading(false);
+          return;
+        }
+      }
+      
       // Create timestamp for clock in
       const clockInTimestamp = serverTimestamp();
       
@@ -166,6 +229,22 @@ export default function LogPage() {
         console.log('User document already exists');
       }
 
+      // Determine INstatus
+      let INstatus = '';
+      if (allowedDay && allowedStartTime && allowedEndTime) {
+        const [startHour, startMin] = allowedStartTime.split(':').map(Number);
+        const startDate = new Date(now);
+        startDate.setHours(startHour, startMin, 0, 0);
+        const onTimeLimit = new Date(startDate.getTime() + 5 * 60000); // 5 min after start
+        if (now < startDate) {
+          INstatus = 'Early IN';
+        } else if (now >= startDate && now <= onTimeLimit) {
+          INstatus = 'On Time';
+        } else {
+          INstatus = 'Late';
+        }
+      }
+      
       // Create clocklog document
       const clocklogRef = collection(userDocRef, 'clocklog');
       console.log('Clocklog collection reference:', clocklogRef.path);
@@ -173,7 +252,8 @@ export default function LogPage() {
       const clockInData = {
         clockIn: clockInTimestamp,
         clockOut: null,
-        day: today
+        day: today,
+        INstatus // Save INstatus
       };
 
       console.log('Creating clocklog document with data:', clockInData);
@@ -200,7 +280,9 @@ export default function LogPage() {
       console.error('Error code:', error.code);
       console.error('Error stack:', error.stack);
       
-      alert(`Clock in failed: ${error.message}`);
+      setAlertMessage(`Clock in failed: ${error.message}`);
+      setAlertType('error');
+      setAlertOpen(true);
     } finally {
       setIsClockInLoading(false);
     }
@@ -216,6 +298,74 @@ export default function LogPage() {
       setIsClockOutLoading(true);
       // Get the user UID from Firebase Auth or use a fallback
       const userUid = auth.currentUser.uid;
+
+      // Fetch allowed schedule from Firestore
+      const userDocRefSchedule = doc(db, 'users', userUid);
+      const userDocSnapSchedule = await getDoc(userDocRefSchedule);
+      let allowedDay = null, allowedStartTime = null, allowedEndTime = null;
+      if (userDocSnapSchedule.exists()) {
+        const data = userDocSnapSchedule.data();
+        allowedDay = data.allowedDay;
+        allowedStartTime = data.allowedStartTime;
+        allowedEndTime = data.allowedEndTime;
+      }
+      // If not found in users, check admin collection
+      if ((!allowedDay || !allowedStartTime || !allowedEndTime) && user.type === 'admin') {
+        const adminDocRef = doc(db, 'admin', userUid);
+        const adminDocSnap = await getDoc(adminDocRef);
+        if (adminDocSnap.exists()) {
+          const data = adminDocSnap.data();
+          allowedDay = data.allowedDay;
+          allowedStartTime = data.allowedStartTime;
+          allowedEndTime = data.allowedEndTime;
+        }
+      }
+      // Enforce allowed schedule if set
+      if (allowedDay && allowedStartTime && allowedEndTime) {
+        const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+        const now = new Date();
+        const today = daysOfWeek[now.getDay()];
+        const currentTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+        // Calculate time boundaries
+        const [startHour, startMin] = allowedStartTime.split(':').map(Number);
+        const [endHour, endMin] = allowedEndTime.split(':').map(Number);
+        const startDate = new Date(now);
+        startDate.setHours(startHour, startMin, 0, 0);
+        const endDate = new Date(now);
+        endDate.setHours(endHour, endMin + 5, 0, 0); // 5 min late
+        const nowDate = new Date(now);
+        if (today !== allowedDay) {
+          setAlertMessage(`You are only allowed to clock out on ${allowedDay}.`);
+          setAlertType('error');
+          setAlertOpen(true);
+          setIsClockOutLoading(false);
+          return;
+        }
+        if (nowDate < startDate) {
+          setAlertMessage(`You can only clock out after ${allowedStartTime}. Current time: ${currentTime}`);
+          setAlertType('error');
+          setAlertOpen(true);
+          setIsClockOutLoading(false);
+          return;
+        }
+        if (nowDate > endDate) {
+          setAlertMessage(`You can only clock out up to 5 minutes after ${allowedEndTime}. Current time: ${currentTime}`);
+          setAlertType('error');
+          setAlertOpen(true);
+          setIsClockOutLoading(false);
+          return;
+        }
+      }
+      // Determine OUTstatus
+      let OUTstatus = '';
+      if (allowedDay && allowedStartTime && allowedEndTime) {
+        const [endHour, endMin] = allowedEndTime.split(':').map(Number);
+        const endDate = new Date(now);
+        endDate.setHours(endHour, endMin, 0, 0);
+        if (now > endDate) {
+          OUTstatus = 'Late out';
+        }
+      }
       
       // Create timestamp for clock out
       const clockOutTimestamp = serverTimestamp();
@@ -228,7 +378,8 @@ export default function LogPage() {
       const clocklogDocRef = doc(userDocRef, 'clocklog', currentClockInId);
       
       await setDoc(clocklogDocRef, {
-        clockOut: clockOutTimestamp
+        clockOut: clockOutTimestamp,
+        OUTstatus // Save OUTstatus
       }, { merge: true });
 
       // Remove clock in status from localStorage
@@ -240,7 +391,9 @@ export default function LogPage() {
       console.log('Clocked out successfully');
     } catch (error) {
       console.error('Error clocking out:', error);
-      alert(`Clock out failed: ${error.message}`);
+      setAlertMessage(`Clock out failed: ${error.message}`);
+      setAlertType('error');
+      setAlertOpen(true);
     } finally {
       setIsClockOutLoading(false);
     }
@@ -668,6 +821,12 @@ export default function LogPage() {
           </div>
         </div>
       )}
+      <ModalAlert
+        open={alertOpen}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setAlertOpen(false)}
+      />
     </div>
   );
 }

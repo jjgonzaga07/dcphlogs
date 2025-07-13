@@ -151,6 +151,12 @@ export default function AdminPage() {
               Welcome, <span className="font-semibold text-[#14206e]">Admin!</span>
             </span>
             <button
+              onClick={() => router.push('/admin/users')}
+              className="bg-[#14206e] hover:bg-[#0f1a5a] text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover-lift"
+            >
+              View Users
+            </button>
+            <button
               onClick={handleLogout}
               className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover-lift"
             >
@@ -334,13 +340,15 @@ export default function AdminPage() {
                   <th className="px-4 py-3 text-left font-semibold">Name</th>
                   <th className="px-4 py-3 text-left font-semibold">Day</th>
                   <th className="px-4 py-3 text-left font-semibold">Clock In</th>
+                  <th className="px-4 py-3 text-left font-semibold">Remarks</th>
                   <th className="px-4 py-3 text-left font-semibold">Clock Out</th>
+                  <th className="px-4 py-3 text-left font-semibold">Remarks</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-100">
                 {filteredLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="text-center py-8 text-gray-500">No logs found.</td>
+                    <td colSpan={6} className="text-center py-8 text-gray-500">No logs found.</td>
                   </tr>
                 ) : (
                   filteredLogs.map(log => (
@@ -351,7 +359,33 @@ export default function AdminPage() {
                         {log.clockIn && log.clockIn.seconds ? new Date(log.clockIn.seconds * 1000).toLocaleString() : '-'}
                       </td>
                       <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                        {log.INstatus ? (
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold
+                            ${log.INstatus === 'Early IN' || log.INstatus === 'On Time' ? 'bg-green-100 text-green-800' : ''}
+                            ${log.INstatus === 'Late' ? 'bg-red-100 text-red-800' : ''}
+                            ${!['Early IN','On Time','Late'].includes(log.INstatus) ? 'bg-gray-100 text-gray-600' : ''}
+                          `}>
+                            {log.INstatus}
+                          </span>
+                        ) : (
+                          <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs font-semibold">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
                         {log.clockOut && log.clockOut.seconds ? new Date(log.clockOut.seconds * 1000).toLocaleString() : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                        {log.OUTstatus ? (
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold
+                            ${log.OUTstatus === 'Late out' ? 'bg-red-100 text-red-800' : ''}
+                            ${log.OUTstatus === '' ? 'bg-gray-100 text-gray-600' : ''}
+                            ${log.OUTstatus !== 'Late out' && log.OUTstatus !== '' ? 'bg-green-100 text-green-800' : ''}
+                          `}>
+                            {log.OUTstatus}
+                          </span>
+                        ) : (
+                          <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs font-semibold">-</span>
+                        )}
                       </td>
                     </tr>
                   ))

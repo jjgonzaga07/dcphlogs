@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '../../configs/firebaseConfigs';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 export default function LoginForm() {
   const [formData, setFormData] = useState({
@@ -32,12 +32,16 @@ export default function LoginForm() {
       // Firebase Auth
       const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
       const user = userCredential.user;
+      
       // Try to get user type from 'admin' collection
       let type = null;
       let userDocSnap = await getDoc(doc(db, 'admin', user.uid));
+      let isAdmin = false;
+      
       if (userDocSnap.exists()) {
         const data = userDocSnap.data();
         type = data.type || 'admin';
+        isAdmin = true;
       } else {
         userDocSnap = await getDoc(doc(db, 'users', user.uid));
         if (userDocSnap.exists()) {
@@ -45,11 +49,32 @@ export default function LoginForm() {
           type = data.type || 'user';
         }
       }
+      
       if (!type) {
         setError('Account type not found. Please contact support.');
         setIsLoading(false);
         return;
       }
+      
+      // Update last login timestamp
+      try {
+        const lastLoginTimestamp = serverTimestamp();
+        if (isAdmin) {
+          // Update admin document with last login
+          await setDoc(doc(db, 'admin', user.uid), {
+            lastLogin: lastLoginTimestamp
+          }, { merge: true });
+        } else {
+          // Update user document with last login
+          await setDoc(doc(db, 'users', user.uid), {
+            lastLogin: lastLoginTimestamp
+          }, { merge: true });
+        }
+      } catch (error) {
+        console.error('Error updating last login:', error);
+        // Don't fail the login if last login update fails
+      }
+      
       // Store user info in localStorage
       localStorage.setItem('user', JSON.stringify({
         email: user.email,
