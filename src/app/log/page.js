@@ -39,12 +39,11 @@ export default function LogPage() {
 
     // Ensure clocklog subcollection exists
     (async () => {
-      let userUid = null;
-      if (auth.currentUser) {
-        userUid = auth.currentUser.uid;
-      } else {
-        userUid = userInfo.email.replace('@', '_at_').replace('.', '_dot_');
+      if (!auth.currentUser) {
+        router.push('/');
+        return;
       }
+      const userUid = auth.currentUser.uid;
       const userDocRef = doc(db, 'users', userUid);
       const clocklogRef = collection(userDocRef, 'clocklog');
       const snapshot = await getDocs(clocklogRef);
@@ -55,12 +54,11 @@ export default function LogPage() {
 
     // Fetch user's name from Firestore
     (async () => {
-      let userUid = null;
-      if (auth.currentUser) {
-        userUid = auth.currentUser.uid;
-      } else {
-        userUid = userInfo.email.replace('@', '_at_').replace('.', '_dot_');
+      if (!auth.currentUser) {
+        router.push('/');
+        return;
       }
+      const userUid = auth.currentUser.uid;
       const userDocRef = doc(db, 'users', userUid);
       const userDocSnap = await getDoc(userDocRef);
       if (userDocSnap.exists()) {
@@ -99,12 +97,8 @@ export default function LogPage() {
 
   const checkClockInStatus = async () => {
     try {
-      let userUid = null;
-      if (auth.currentUser) {
-        userUid = auth.currentUser.uid;
-      } else {
-        userUid = user.email.replace('@', '_at_').replace('.', '_dot_');
-      }
+      if (!auth.currentUser) return;
+      const userUid = auth.currentUser.uid;
       const userDocRef = doc(db, 'users', userUid);
       const clocklogRef = collection(userDocRef, 'clocklog');
 
@@ -129,8 +123,8 @@ export default function LogPage() {
   const handleClockIn = async () => {
     console.log('Clock in button clicked');
     
-    if (!user) {
-      console.error('No user data available');
+    if (!user || !auth.currentUser) {
+      console.error('No user data or not authenticated');
       return;
     }
 
@@ -140,15 +134,7 @@ export default function LogPage() {
       console.log('User:', user);
       
       // Get the user UID from Firebase Auth or use a fallback
-      let userUid = null;
-      
-      if (auth.currentUser) {
-        userUid = auth.currentUser.uid;
-        console.log('Using auth.currentUser.uid:', userUid);
-      } else {
-        userUid = user.email.replace('@', '_at_').replace('.', '_dot_');
-        console.log('Using fallback UID:', userUid);
-      }
+      const userUid = auth.currentUser.uid;
       
       // Create timestamp for clock in
       const clockInTimestamp = serverTimestamp();
@@ -172,6 +158,7 @@ export default function LogPage() {
         await setDoc(userDocRef, {
           email: user.email,
           type: 'user',
+          name: user.displayName || userName || 'User', // Always set name
           createdAt: serverTimestamp()
         });
         console.log('User document created successfully');
@@ -220,22 +207,16 @@ export default function LogPage() {
   };
 
   const handleClockOut = async () => {
-    if (!user || !currentClockInId) {
-      console.error('No user data or clock in ID available');
+    if (!user || !currentClockInId || !auth.currentUser) {
+      console.error('No user data, clock in ID, or not authenticated');
       return;
     }
 
     try {
       setIsClockOutLoading(true);
       // Get the user UID from Firebase Auth or use a fallback
-      let userUid = null;
+      const userUid = auth.currentUser.uid;
       
-      if (auth.currentUser) {
-        userUid = auth.currentUser.uid;
-      } else {
-        userUid = user.email.replace('@', '_at_').replace('.', '_dot_');
-      }
-
       // Create timestamp for clock out
       const clockOutTimestamp = serverTimestamp();
       
@@ -319,27 +300,29 @@ export default function LogPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white to-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-white to-[#e6eaff]">
       {/* Header */}
-      <header className="bg-white shadow-lg border-b border-gray-200">
+      <header className="bg-white shadow-lg border-b border-gray-200 sticky top-0 z-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
+          <div className="flex flex-col md:flex-row justify-between items-center py-6 gap-4">
             <div className="flex items-center animate-slide-in-left">
               <div className="w-16 h-16 mr-4">
                 <img 
                   src="/images/logo.PNG" 
                   alt="DCPH Logo" 
-                  className="w-full h-full object-contain"
+                  className="w-full h-full object-contain rounded-full border-2 border-[#14206e] shadow-md"
                 />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-[#14206e]">DCPH: Anime and Manga</h1>
+                <h1 className="whitespace-nowrap truncate text-[#14206e] font-bold leading-tight" style={{ fontSize: 'clamp(1.25rem, 4vw, 2.25rem)' }}>
+                  DCPH: Anime and Manga
+                </h1>
                 <p className="text-sm text-gray-600">User Dashboard</p>
               </div>
             </div>
-            <div className="flex items-center space-x-4 animate-slide-in-right">
+            <div className="flex items-center space-x-2 md:space-x-4 animate-slide-in-right">
               <span className="text-sm text-gray-600">
-                Welcome, <span className="font-semibold text-[#14206e]">{userName || user.email}</span>
+                Welcome, <span className="font-semibold text-[#14206e]">{userName || 'User'}</span>
               </span>
               <button
                 onClick={handleSauceNAOClick}
@@ -360,13 +343,12 @@ export default function LogPage() {
           </div>
         </div>
       </header>
-
       {/* Main Content */}
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <div className="space-y-6">
+        <div className="px-2 py-6 sm:px-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* Real-time Clock */}
-            <div className="bg-white shadow-lg rounded-xl p-8 hover-lift animate-fade-in">
+            <div className="bg-white shadow-lg rounded-2xl p-8 hover-lift animate-fade-in flex flex-col items-center">
               <h2 className="text-2xl font-bold text-[#14206e] mb-6 flex items-center">
                 <svg className="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -378,75 +360,15 @@ export default function LogPage() {
               </div>
               <p className="text-center text-gray-500 mt-4">Real-time</p>
             </div>
-
-            {/* Clock In/Out Section */}
-            <div className="bg-white shadow-lg rounded-xl p-8 hover-lift animate-fade-in">
-              <h2 className="text-xl font-semibold text-[#14206e] mb-6 flex items-center">
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                Time Clock
-              </h2>
-              <div className="flex justify-center space-x-6">
-                {!isClockedIn ? (
-                  <button
-                    onClick={handleClockIn}
-                    disabled={isClockInLoading}
-                    className="bg-[#14206e] hover:bg-[#1a2a8a] text-white px-8 py-4 rounded-xl text-lg font-medium transition-all duration-200 hover-lift hover-scale flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isClockInLoading ? (
-                      <>
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                        Clocking In...
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                        </svg>
-                        Clock In
-                      </>
-                    )}
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleClockOut}
-                    disabled={isClockOutLoading}
-                    className="bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-xl text-lg font-medium transition-all duration-200 hover-lift hover-scale flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isClockOutLoading ? (
-                      <>
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                        Clocking Out...
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-                        </svg>
-                        Clock Out
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
-              <div className="mt-6 text-center">
-                <p className={`text-lg font-medium ${isClockedIn ? 'text-green-600' : 'text-gray-500'} flex items-center justify-center`}>
-                  <div className={`w-3 h-3 rounded-full mr-2 ${isClockedIn ? 'bg-green-500 animate-pulse-custom' : 'bg-gray-400'}`}></div>
-                  {isClockInLoading ? 'Clocking In...' : isClockOutLoading ? 'Clocking Out...' : isClockedIn ? 'Currently Clocked In' : 'Not Clocked In'}
-                </p>
-              </div>
-            </div>
-
             {/* Status Info */}
-            <div className="bg-white shadow-lg rounded-xl p-8 hover-lift animate-fade-in">
+            <div className="bg-white shadow-lg rounded-2xl p-8 hover-lift animate-fade-in">
               <h3 className="text-lg font-medium text-[#14206e] mb-6 flex items-center">
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
                 Today's Status
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 gap-6">
                 <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-6 rounded-xl border border-blue-200 hover-lift">
                   <h4 className="font-medium text-[#14206e] flex items-center">
                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -471,16 +393,73 @@ export default function LogPage() {
                 </div>
               </div>
             </div>
+            {/* Clock In/Out Section */}
+            <div className="bg-white shadow-lg rounded-2xl p-8 hover-lift animate-fade-in flex flex-col items-center md:col-span-2">
+              <h2 className="text-xl font-semibold text-[#14206e] mb-6 flex items-center">
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Time Clock
+              </h2>
+              <div className="flex flex-col w-full items-center space-y-4">
+                {!isClockedIn ? (
+                  <button
+                    onClick={handleClockIn}
+                    disabled={isClockInLoading}
+                    className="bg-[#14206e] hover:bg-[#1a2a8a] text-white w-full max-w-xs py-4 rounded-xl text-lg font-medium transition-all duration-200 hover-lift hover-scale flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isClockInLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                        Clocking In...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                        Clock In
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleClockOut}
+                    disabled={isClockOutLoading}
+                    className="bg-red-600 hover:bg-red-700 text-white w-full max-w-xs py-4 rounded-xl text-lg font-medium transition-all duration-200 hover-lift hover-scale flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isClockOutLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                        Clocking Out...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                        Clock Out
+                      </>
+                    )}
+                  </button>
+                )}
+                <div className="mt-4 text-center w-full">
+                  <p className={`text-lg font-medium flex items-center justify-center ${isClockedIn ? 'text-green-600' : 'text-gray-500'}`}>
+                    <span className={`w-3 h-3 rounded-full mr-2 ${isClockedIn ? 'bg-green-500 animate-pulse-custom' : 'bg-gray-400'}`}></span>
+                  {isClockInLoading ? 'Clocking In...' : isClockOutLoading ? 'Clocking Out...' : isClockedIn ? 'Currently Clocked In' : 'Not Clocked In'}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </main>
-
       {/* SauceNAO Modal */}
       {showSauceNAOModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 animate-fade-in">
-          <div className="bg-white rounded-xl shadow-lg p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-[#14206e] flex items-center">
+          <div className="bg-white rounded-xl shadow-lg p-4 sm:p-8 max-w-full w-full sm:max-w-2xl mx-2 sm:mx-4 max-h-[95vh] overflow-y-auto">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4">
+              <h2 className="text-xl sm:text-2xl font-bold text-[#14206e] flex items-center">
                 <svg className="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                 </svg>
@@ -488,7 +467,7 @@ export default function LogPage() {
               </h2>
               <button
                 onClick={closeModal}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="text-gray-400 hover:text-gray-600 transition-colors self-end sm:self-auto"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -504,7 +483,7 @@ export default function LogPage() {
                 value={imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
                 placeholder="https://example.com/image.jpg"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#14206e] focus:border-[#14206e] transition-all duration-200"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#14206e] focus:border-[#14206e] transition-all duration-200 text-base"
                 style={{ color: '#14206e' }}
               />
             </div>
@@ -513,7 +492,7 @@ export default function LogPage() {
                 <button
                   onClick={handleSauceNAOSearch}
                   disabled={isSearching}
-                  className="w-full bg-[#14206e] hover:bg-[#1a2a8a] text-white px-6 py-3 rounded-lg font-medium transition-all duration-200 hover-lift disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                  className="w-full bg-[#14206e] hover:bg-[#1a2a8a] text-white px-6 py-3 rounded-lg font-medium transition-all duration-200 hover-lift disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-base sm:text-lg"
                 >
                   {isSearching ? (
                     <>
@@ -531,7 +510,6 @@ export default function LogPage() {
                 </button>
               </div>
             )}
-            {/* Results Section */}
             {sauceNAOResults && (
               <div className="border-t pt-6">
                 <h3 className="text-lg font-semibold text-[#14206e] mb-4">Search Results</h3>
@@ -587,97 +565,89 @@ export default function LogPage() {
                     {/* Detailed Results */}
                     {sauceNAOResults.results && sauceNAOResults.results.length > 0 ? (
                       sauceNAOResults.results.slice(0, 8).map((result, index) => (
-                        <div key={index} className="bg-gray-50 rounded-lg p-4 hover-lift">
-                          <div className="flex items-start space-x-4">
-                            {result.header.thumbnail && (
-                              <img
-                                src={result.header.thumbnail}
-                                alt="Result thumbnail"
-                                className="w-16 h-16 object-cover rounded"
-                              />
-                            )}
-                            <div className="flex-1">
-                              <h4 className="font-medium text-[#14206e]">
-                                {result.header.index_name || 'Unknown Source'}
-                              </h4>
-                              <p className="text-sm text-gray-600 mt-1">
-                                Similarity: {result.header.similarity}%
+                        <div key={index} className="bg-gray-50 rounded-lg p-4 hover-lift flex flex-col sm:flex-row items-center gap-4 w-full">
+                          {result.header.thumbnail && (
+                            <img
+                              src={result.header.thumbnail}
+                              alt="Result thumbnail"
+                              className="w-20 h-20 sm:w-16 sm:h-16 object-cover rounded mb-2 sm:mb-0 flex-shrink-0"
+                              style={{ maxWidth: '100%', height: 'auto' }}
+                            />
+                          )}
+                          <div className="flex-1 w-full">
+                            <h4 className="font-medium text-[#14206e] text-base sm:text-lg truncate">
+                              {result.header.index_name || 'Unknown Source'}
+                            </h4>
+                            <p className="text-sm text-gray-600 mt-1">
+                              Similarity: {result.header.similarity}%
+                            </p>
+                            {/* Series/Anime Information */}
+                            {result.data && result.data.source && (
+                              <p className="text-sm text-[#14206e] mt-1 font-semibold truncate">
+                                Series: {result.data.source}
                               </p>
-                              
-                              {/* Series/Anime Information */}
-                              {result.data && result.data.source && (
-                                <p className="text-sm text-gray-700 mt-1 font-semibold">
-                                  Series: {result.data.source}
-                                </p>
-                              )}
-                              {result.data && result.data.title && (
-                                <p className="text-sm text-gray-700 mt-1">
-                                  Title: {result.data.title}
-                                </p>
-                              )}
-                              
-                              {/* Episode Information */}
-                              {result.data && result.data.part && (
-                                <p className="text-sm text-blue-600 font-medium mt-1">
-                                  Episode: {result.data.part}
-                                </p>
-                              )}
-                              {result.data && result.data.episode && (
-                                <p className="text-sm text-blue-600 font-medium mt-1">
-                                  Episode: {result.data.episode}
-                                </p>
-                              )}
-                              
-                              {/* Movie Information */}
-                              {result.data && result.data.year && (
-                                <p className="text-sm text-green-600 font-medium mt-1">
-                                  Year: {result.data.year}
-                                </p>
-                              )}
-                              
-                              {/* Character Information */}
-                              {result.data && result.data.character && (
-                                <p className="text-sm text-purple-600 font-medium mt-1">
-                                  Character: {result.data.character}
-                                </p>
-                              )}
-                              
-                              {/* Artist Information */}
-                              {result.data && result.data.author && (
-                                <p className="text-sm text-gray-700">
-                                  Artist: {result.data.author}
-                                </p>
-                              )}
-                              {result.data && result.data.creator && (
-                                <p className="text-sm text-gray-700">
-                                  Creator: {result.data.creator}
-                                </p>
-                              )}
-                              
-                              {/* Additional Details */}
-                              {result.data && result.data.material && (
-                                <p className="text-sm text-gray-600 mt-1">
-                                  Material: {result.data.material}
-                                </p>
-                              )}
-                              {result.data && result.data.characters && (
-                                <p className="text-sm text-gray-600 mt-1">
-                                  Characters: {result.data.characters}
-                                </p>
-                              )}
-                              
-                              {/* Source Link */}
-                              {result.data && result.data.ext_urls && result.data.ext_urls.length > 0 && (
-                                <a
-                                  href={result.data.ext_urls[0]}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-sm text-[#14206e] hover:underline mt-2 inline-block"
-                                >
-                                  View Source →
-                                </a>
-                              )}
-                            </div>
+                            )}
+                            {result.data && result.data.title && (
+                              <p className="text-sm text-[#14206e] mt-1 truncate">
+                                Title: {result.data.title}
+                              </p>
+                            )}
+                            {/* Episode Information */}
+                            {result.data && result.data.part && (
+                              <p className="text-sm text-blue-600 font-medium mt-1 truncate">
+                                Episode: {result.data.part}
+                              </p>
+                            )}
+                            {result.data && result.data.episode && (
+                              <p className="text-sm text-blue-600 font-medium mt-1 truncate">
+                                Episode: {result.data.episode}
+                              </p>
+                            )}
+                            {/* Movie Information */}
+                            {result.data && result.data.year && (
+                              <p className="text-sm text-green-600 font-medium mt-1 truncate">
+                                Year: {result.data.year}
+                              </p>
+                            )}
+                            {/* Character Information */}
+                            {result.data && result.data.character && (
+                              <p className="text-sm text-purple-600 font-medium mt-1 truncate">
+                                Character: {result.data.character}
+                              </p>
+                            )}
+                            {/* Artist Information */}
+                            {result.data && result.data.author && (
+                              <p className="text-sm text-gray-700 truncate">
+                                Artist: {result.data.author}
+                              </p>
+                            )}
+                            {result.data && result.data.creator && (
+                              <p className="text-sm text-gray-700 truncate">
+                                Creator: {result.data.creator}
+                              </p>
+                            )}
+                            {/* Additional Details */}
+                            {result.data && result.data.material && (
+                              <p className="text-sm text-gray-600 mt-1 truncate">
+                                Material: {result.data.material}
+                              </p>
+                            )}
+                            {result.data && result.data.characters && (
+                              <p className="text-sm text-gray-600 mt-1 truncate">
+                                Characters: {result.data.characters}
+                              </p>
+                            )}
+                            {/* Source Link */}
+                            {result.data && result.data.ext_urls && result.data.ext_urls.length > 0 && (
+                              <a
+                                href={result.data.ext_urls[0]}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-[#14206e] hover:underline mt-2 inline-block break-all"
+                              >
+                                View Source →
+                              </a>
+                            )}
                           </div>
                         </div>
                       ))

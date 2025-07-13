@@ -127,25 +127,28 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white to-gray-50">
-      <header className="bg-white shadow-lg border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex justify-between items-center">
+    <div className="min-h-screen bg-gradient-to-br from-white to-[#e6eaff]">
+      {/* Header */}
+      <header className="bg-white shadow-lg border-b border-gray-200 sticky top-0 z-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center animate-slide-in-left">
             <div className="w-16 h-16 mr-4">
               <img 
                 src="/images/logo.PNG" 
                 alt="DCPH Logo" 
-                className="w-full h-full object-contain"
+                className="w-full h-full object-contain rounded-full border-2 border-[#14206e] shadow-md"
               />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-[#14206e]">DCPH: Anime and Manga</h1>
+              <h1 className="whitespace-nowrap truncate text-[#14206e] font-bold leading-tight" style={{ fontSize: 'clamp(1.25rem, 4vw, 2.25rem)' }}>
+                DCPH: Anime and Manga
+              </h1>
               <p className="text-sm text-gray-600">Admin Dashboard</p>
             </div>
           </div>
-          <div className="flex items-center space-x-4 animate-slide-in-right">
+          <div className="flex items-center space-x-2 md:space-x-4 animate-slide-in-right">
             <span className="text-sm text-gray-600">
-              Welcome, <span className="font-semibold text-[#14206e]"> Admin!</span>
+              Welcome, <span className="font-semibold text-[#14206e]">Admin!</span>
             </span>
             <button
               onClick={handleLogout}
@@ -157,7 +160,7 @@ export default function AdminPage() {
         </div>
       </header>
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="bg-white shadow-lg rounded-xl p-8 overflow-x-auto animate-fade-in">
+        <div className="bg-white shadow-lg rounded-2xl p-8 overflow-x-auto animate-fade-in">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6 gap-4">
             {/* Search by Name */}
             <div className="relative hover-lift flex-1">
@@ -175,7 +178,6 @@ export default function AdminPage() {
                 style={{ color: '#14206e' }}
               />
             </div>
-            
             {/* Date Filter */}
             <div className="hover-lift">
               <div className="relative">
@@ -189,10 +191,10 @@ export default function AdminPage() {
                   value={dateFilter}
                   onChange={e => setDateFilter(e.target.value)}
                   className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-[#14206e] focus:outline-none focus:ring-2 focus:ring-[#14206e] focus:border-[#14206e] sm:text-sm transition-all duration-200"
+                  style={{ color: '#14206e' }}
                 />
               </div>
             </div>
-            
             {/* Day Filter */}
             <div className="hover-lift">
               <select
@@ -206,7 +208,6 @@ export default function AdminPage() {
                 ))}
               </select>
             </div>
-            
             {/* Clear Filters Button */}
             <div className="hover-lift">
               <button
@@ -221,7 +222,6 @@ export default function AdminPage() {
               </button>
             </div>
           </div>
-          
           {/* Loading State for Data Fetching */}
           {isFetchingData && (
             <div className="mb-6 p-6 bg-blue-50 border border-blue-200 rounded-xl animate-fade-in">
@@ -234,7 +234,6 @@ export default function AdminPage() {
               </div>
             </div>
           )}
-          
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
             <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-6 rounded-xl border border-blue-200 hover-lift">
@@ -249,9 +248,9 @@ export default function AdminPage() {
                     <dt className="text-sm font-medium text-gray-500 truncate">Total Users</dt>
                     <dd className="text-lg font-medium text-[#14206e]">
                       {isFetchingData ? (
-                        <div className="animate-shimmer h-6 bg-gray-200 rounded"></div>
+                        <div className="h-4 w-16 bg-blue-100 animate-pulse rounded" />
                       ) : (
-                        new Set(clocklogs.map(log => log.userId)).size
+                        [...new Set(clocklogs.map(log => log.userId))].length
                       )}
                     </dd>
                   </dl>
@@ -327,82 +326,38 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-            {/* Table Loading State */}
-            {isFetchingData ? (
-              <div className="p-8 text-center">
-                <div className="flex flex-col items-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#14206e] mb-4"></div>
-                  <p className="text-lg font-medium text-[#14206e]">Loading clock logs...</p>
-                  <p className="text-sm text-gray-600 mt-2">Please wait while we fetch the data</p>
-                </div>
-              </div>
-            ) : (
-              <table className="min-w-full divide-y divide-gray-300">
-                <thead className="bg-gradient-to-r from-[#14206e] to-[#1a2a8a]">
+          {/* Logs Table */}
+          <div className="overflow-x-auto rounded-lg border border-gray-200">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-[#14206e] text-white">
+                <tr>
+                  <th className="px-4 py-3 text-left font-semibold">Name</th>
+                  <th className="px-4 py-3 text-left font-semibold">Day</th>
+                  <th className="px-4 py-3 text-left font-semibold">Clock In</th>
+                  <th className="px-4 py-3 text-left font-semibold">Clock Out</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-100">
+                {filteredLogs.length === 0 ? (
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Day</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Date</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Clock In</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Clock Out</th>
+                    <td colSpan={4} className="text-center py-8 text-gray-500">No logs found.</td>
                   </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredLogs.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="text-center py-8 text-gray-500">
-                        <div className="flex flex-col items-center">
-                          <svg className="h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                          </svg>
-                          <p className="text-lg font-medium">No records found</p>
-                          <p className="text-sm text-gray-400">Try adjusting your search or filter criteria</p>
-                        </div>
+                ) : (
+                  filteredLogs.map(log => (
+                    <tr key={log.id} className="hover:bg-blue-50 transition-all duration-150">
+                      <td className="px-4 py-3 text-[#14206e] font-medium whitespace-nowrap">{log.name}</td>
+                      <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{log.day}</td>
+                      <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                        {log.clockIn && log.clockIn.seconds ? new Date(log.clockIn.seconds * 1000).toLocaleString() : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                        {log.clockOut && log.clockOut.seconds ? new Date(log.clockOut.seconds * 1000).toLocaleString() : '-'}
                       </td>
                     </tr>
-                  ) : (
-                    filteredLogs.map((log, index) => (
-                      <tr key={log.id} className={`hover:bg-gray-50 transition-colors duration-200 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className="flex-shrink-0 h-10 w-10">
-                              <div className="h-10 w-10 rounded-full bg-[#14206e] flex items-center justify-center">
-                                <span className="text-sm font-medium text-white">
-                                  {log.name.charAt(0).toUpperCase()}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="ml-4">
-                              <div className="text-sm font-medium text-gray-900">{log.name}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-[#14206e]">
-                            {log.day}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {log.clockIn && log.clockIn.seconds ? new Date(log.clockIn.seconds * 1000).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' }) : ''}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {log.clockIn && log.clockIn.seconds ? new Date(log.clockIn.seconds * 1000).toLocaleString('en-PH', { timeZone: 'Asia/Manila' }) : ''}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {log.clockOut && log.clockOut.seconds ? new Date(log.clockOut.seconds * 1000).toLocaleString('en-PH', { timeZone: 'Asia/Manila' }) : (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              <div className="w-2 h-2 bg-green-400 rounded-full mr-1 animate-pulse-custom"></div>
-                              Active
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            )}
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </main>
