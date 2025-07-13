@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { db, auth } from '../../configs/firebaseConfigs';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import * as XLSX from 'xlsx';
 
 export default function AdminPage() {
   const [user, setUser] = useState(null);
@@ -118,6 +119,31 @@ export default function AdminPage() {
 
   const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+  const handleExportToExcel = () => {
+    // Group logs by day
+    const logsByDay = {};
+    filteredLogs.forEach(log => {
+      const day = log.day || 'Unknown';
+      if (!logsByDay[day]) logsByDay[day] = [];
+      logsByDay[day].push(log);
+    });
+    const workbook = XLSX.utils.book_new();
+    Object.entries(logsByDay).forEach(([day, logs]) => {
+      const exportData = logs.map(log => ({
+        Name: log.name,
+        'Clock In': log.clockIn && log.clockIn.seconds ? new Date(log.clockIn.seconds * 1000).toLocaleString() : '',
+        'IN Remarks': log.INstatus || '',
+        'Clock Out': log.clockOut && log.clockOut.seconds ? new Date(log.clockOut.seconds * 1000).toLocaleString() : '',
+        'OUT Remarks': log.OUTstatus || '',
+        Day: log.day || '',
+        Date: log.clockIn && log.clockIn.seconds ? new Date(log.clockIn.seconds * 1000).toLocaleDateString() : ''
+      }));
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      XLSX.utils.book_append_sheet(workbook, worksheet, day);
+    });
+    XLSX.writeFile(workbook, 'Log History.xlsx');
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white to-gray-50">
@@ -214,8 +240,8 @@ export default function AdminPage() {
                 ))}
               </select>
             </div>
-            {/* Clear Filters Button */}
-            <div className="hover-lift">
+            {/* Clear Filters and Export Buttons */}
+            <div className="flex gap-2 hover-lift">
               <button
                 onClick={() => {
                   setSearch('');
@@ -225,6 +251,12 @@ export default function AdminPage() {
                 className="w-full px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition-all duration-200 hover-lift"
               >
                 Clear Filters
+              </button>
+              <button
+                onClick={handleExportToExcel}
+                className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-all duration-200 hover-lift"
+              >
+                Export
               </button>
             </div>
           </div>
