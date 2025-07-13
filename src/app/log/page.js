@@ -298,6 +298,7 @@ export default function LogPage() {
       setIsClockOutLoading(true);
       // Get the user UID from Firebase Auth or use a fallback
       const userUid = auth.currentUser.uid;
+      const now = new Date(); // Ensure now is available throughout the function
 
       // Fetch allowed schedule from Firestore
       const userDocRefSchedule = doc(db, 'users', userUid);
@@ -323,7 +324,6 @@ export default function LogPage() {
       // Enforce allowed schedule if set
       if (allowedDay && allowedStartTime && allowedEndTime) {
         const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-        const now = new Date();
         const today = daysOfWeek[now.getDay()];
         const currentTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
         // Calculate time boundaries
@@ -332,7 +332,9 @@ export default function LogPage() {
         const startDate = new Date(now);
         startDate.setHours(startHour, startMin, 0, 0);
         const endDate = new Date(now);
-        endDate.setHours(endHour, endMin + 5, 0, 0); // 5 min late
+        endDate.setHours(endHour, endMin, 0, 0);
+        const endDateWithGrace = new Date(now);
+        endDateWithGrace.setHours(endHour, endMin + 5, 0, 0); // 5 min late
         const nowDate = new Date(now);
         if (today !== allowedDay) {
           setAlertMessage(`You are only allowed to clock out on ${allowedDay}.`);
@@ -348,13 +350,6 @@ export default function LogPage() {
           setIsClockOutLoading(false);
           return;
         }
-        if (nowDate > endDate) {
-          setAlertMessage(`You can only clock out up to 5 minutes after ${allowedEndTime}. Current time: ${currentTime}`);
-          setAlertType('error');
-          setAlertOpen(true);
-          setIsClockOutLoading(false);
-          return;
-        }
       }
       // Determine OUTstatus
       let OUTstatus = '';
@@ -362,7 +357,11 @@ export default function LogPage() {
         const [endHour, endMin] = allowedEndTime.split(':').map(Number);
         const endDate = new Date(now);
         endDate.setHours(endHour, endMin, 0, 0);
-        if (now > endDate) {
+        const endDateWithGrace = new Date(now);
+        endDateWithGrace.setHours(endHour, endMin + 5, 0, 0);
+        if (now > endDateWithGrace) {
+          OUTstatus = 'Missed';
+        } else if (now > endDate) {
           OUTstatus = 'Late out';
         }
       }

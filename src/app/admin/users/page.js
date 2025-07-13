@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { db, auth } from '../../../configs/firebaseConfigs';
 import { collection, getDocs, doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import ModalAlert from '../../components/ModalAlert';
+import * as XLSX from 'xlsx';
 
 export default function UsersPage() {
   const [user, setUser] = useState(null);
@@ -21,6 +22,7 @@ export default function UsersPage() {
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
   const [alertType, setAlertType] = useState('error');
+  const [userTypeFilter, setUserTypeFilter] = useState('all');
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -94,7 +96,6 @@ export default function UsersPage() {
           allowedEndTime: userData.allowedEndTime || ''
         });
       }
-      
       // Also fetch admin users to include them in the list
       const adminSnapshot = await getDocs(collection(db, 'admin'));
       for (const adminDoc of adminSnapshot.docs) {
@@ -111,8 +112,6 @@ export default function UsersPage() {
           allowedEndTime: adminData.allowedEndTime || ''
         });
       }
-      
-      console.log('Fetched users:', usersData);
       setUsers(usersData);
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -165,11 +164,13 @@ export default function UsersPage() {
     }
   };
 
-  // Filtered users based on search
-  const filteredUsers = users.filter(user => 
-    user.name.toLowerCase().includes(search.toLowerCase()) ||
-    user.email.toLowerCase().includes(search.toLowerCase())
-  );
+  // Filtered users based on search and user type
+  const filteredUsers = users.filter(user => {
+    const matchesSearch = user.name.toLowerCase().includes(search.toLowerCase()) ||
+      user.email.toLowerCase().includes(search.toLowerCase());
+    const matchesType = userTypeFilter === 'all' || user.type === userTypeFilter;
+    return matchesSearch && matchesType;
+  });
 
   if (isLoading) {
     return (
@@ -237,6 +238,20 @@ export default function UsersPage() {
                 className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-[#14206e] focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-[#14206e] focus:border-[#14206e] sm:text-sm transition-all duration-200"
                 style={{ color: '#14206e' }}
               />
+            </div>
+            {/* User Type Filter */}
+            <div className="flex items-center gap-2">
+              <label htmlFor="userTypeFilter" className="text-[#14206e] font-medium text-sm">Type:</label>
+              <select
+                id="userTypeFilter"
+                value={userTypeFilter}
+                onChange={e => setUserTypeFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-[#14206e] focus:outline-none focus:ring-2 focus:ring-[#14206e] focus:border-[#14206e] text-sm bg-white"
+              >
+                <option value="all">All</option>
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+              </select>
             </div>
             {/* Clear Search Button */}
             <div className="hover-lift flex flex-row gap-2">
@@ -389,17 +404,14 @@ export default function UsersPage() {
                           : 'Never'}
                       </td>
                       <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
-                        {user.allowedDay && user.allowedStartTime && user.allowedEndTime
-                          ? `${user.allowedDay} ${user.allowedStartTime} - ${user.allowedEndTime}`
-                          : <span className="italic text-gray-400">Not set</span>}
-                      </td>
-                      <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
-                        <button
-                          onClick={() => handleEditSchedule(user)}
-                          className="px-3 py-1 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-xs font-medium transition-all duration-200 hover-lift"
-                        >
-                          Edit Schedule
-                        </button>
+                        {user.type !== 'admin' && (
+                          <button
+                            onClick={() => handleEditSchedule(user)}
+                            className="px-3 py-1 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-xs font-medium transition-all duration-200 hover-lift"
+                          >
+                            Edit Schedule
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))
