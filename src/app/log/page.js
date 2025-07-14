@@ -154,6 +154,7 @@ export default function LogPage() {
     try {
       if (!auth.currentUser) return;
       
+      const now = new Date(); // Move this to the top
       const userUid = auth.currentUser.uid;
       
       // Check if we've already processed missed schedules for this session
@@ -193,9 +194,35 @@ export default function LogPage() {
       // If no schedule is set, skip
       if (!allowedDay || !allowedStartTime || !allowedEndTime) return;
       
+      // Get user's creation date to avoid logging missed schedules before user existed
+      let userCreatedAt = null;
+      if (userDocSnap.exists()) {
+        const userData = userDocSnap.data();
+        if (userData.createdAt) {
+          userCreatedAt = userData.createdAt.toDate ? userData.createdAt.toDate() : new Date(userData.createdAt);
+        }
+      }
+      
+      // If we can't determine when user was created, skip to avoid false positives
+      if (!userCreatedAt) {
+        console.log('User creation date not found, skipping missed schedule check');
+        return;
+      }
+      
+      console.log('Checking missed schedules from', userCreatedAt.toDateString(), 'to', now.toDateString());
+      
+      // If user was created today, no need to check for missed schedules
+      const todayDate = new Date();
+      todayDate.setHours(0, 0, 0, 0);
+      const userCreatedToday = new Date(userCreatedAt);
+      userCreatedToday.setHours(0, 0, 0, 0);
+      
+      if (userCreatedToday.getTime() === todayDate.getTime()) {
+        console.log('User was created today, no missed schedules to check');
+        return;
+      }
+      
       const clocklogRef = collection(userDocRef, 'clocklog');
-      const now = new Date();
-      const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
       
       // Get all existing logs for the allowed day to avoid multiple queries
       const existingLogQuery = query(clocklogRef, where('day', '==', allowedDay));
@@ -208,16 +235,17 @@ export default function LogPage() {
         };
       });
       
-      // Check the last 7 days for missed schedules
+      // Check the last 7 days for missed schedules, but only after user was created
       let missedCount = 0;
       for (let i = 1; i <= 7; i++) {
         const checkDate = new Date(now);
         checkDate.setDate(checkDate.getDate() - i);
         const dayOfWeek = daysOfWeek[checkDate.getDay()];
         
-        // Only check if this day matches the allowed schedule and is not in the future
-        if (dayOfWeek === allowedDay && checkDate <= now) {
+        // Only check if this day matches the allowed schedule, is not in the future, and is after user creation
+        if (dayOfWeek === allowedDay && checkDate <= now && checkDate >= userCreatedAt) {
           const dateString = checkDate.toISOString().split('T')[0];
+          console.log(`Checking ${allowedDay} ${dateString} for missed schedule`);
           
           // Check if there's already a log for this date using the pre-fetched data
           const hasLogForDate = existingLogs.some(log => {
@@ -279,7 +307,7 @@ export default function LogPage() {
             };
             
             await addDoc(clocklogRef, missedLogData);
-            console.log(`Auto-logged missed schedule for ${dateString}`);
+            console.log(`Auto-logged missed schedule for ${dateString} (user created: ${userCreatedAt.toDateString()})`);
             missedCount++;
           }
         }
@@ -336,6 +364,14 @@ export default function LogPage() {
           allowedStartTime = data.allowedStartTime;
           allowedEndTime = data.allowedEndTime;
         }
+      }
+      // Require schedule to be set before allowing clock in
+      if (!allowedDay || !allowedStartTime || !allowedEndTime) {
+        setAlertMessage('You must have a schedule set before you can clock in. Please contact your administrator.');
+        setAlertType('error');
+        setAlertOpen(true);
+        setIsClockInLoading(false);
+        return;
       }
       // Enforce allowed schedule if set
       if (allowedDay && allowedStartTime && allowedEndTime) {
