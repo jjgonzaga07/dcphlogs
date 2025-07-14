@@ -3,13 +3,15 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '../../configs/firebaseConfigs';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
-export default function LoginForm() {
+export default function RegisterForm() {
   const [formData, setFormData] = useState({
+    name: '',
     email: '',
-    password: ''
+    password: '',
+    confirmPassword: ''
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -27,82 +29,62 @@ export default function LoginForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    // Validation
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters long.');
+      return;
+    }
+
+    if (!formData.name.trim()) {
+      setError('Name is required.');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      // Firebase Auth
-      const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
+      // Create user with Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
       const user = userCredential.user;
       
-      // Try to get user type from 'admin' collection
-      let type = null;
-      let userDocSnap = await getDoc(doc(db, 'admin', user.uid));
-      let isAdmin = false;
-      
-      if (userDocSnap.exists()) {
-        const data = userDocSnap.data();
-        type = data.type || 'admin';
-        isAdmin = true;
-      } else {
-        userDocSnap = await getDoc(doc(db, 'users', user.uid));
-        if (userDocSnap.exists()) {
-          const data = userDocSnap.data();
-          type = data.type || 'user';
-        }
-      }
-      
-      if (!type) {
-        setError('Account type not found. Please contact support.');
-        setIsLoading(false);
-        return;
-      }
-      
-      // Update last login timestamp
-      try {
-        const lastLoginTimestamp = serverTimestamp();
-        if (isAdmin) {
-          // Update admin document with last login
-          await setDoc(doc(db, 'admin', user.uid), {
-            lastLogin: lastLoginTimestamp
-          }, { merge: true });
-        } else {
-          // Update user document with last login
-          await setDoc(doc(db, 'users', user.uid), {
-            lastLogin: lastLoginTimestamp
-          }, { merge: true });
-        }
-      } catch (error) {
-        console.error('Error updating last login:', error);
-        // Don't fail the login if last login update fails
-      }
+      // Create user document in Firestore
+      const userDocRef = doc(db, 'users', user.uid);
+      await setDoc(userDocRef, {
+        name: formData.name.trim(),
+        email: formData.email,
+        type: 'user',
+        createdAt: serverTimestamp(),
+        lastLogin: serverTimestamp()
+      });
       
       // Store user info in localStorage
       localStorage.setItem('user', JSON.stringify({
         email: user.email,
         uid: user.uid,
-        type,
+        type: 'user',
         isAuthenticated: true
       }));
+
       // Show success modal
       setShowSuccessModal(true);
       setTimeout(() => {
         setShowSuccessModal(false);
-        if (type === 'admin') {
-          router.push('/admin');
-        } else {
-          router.push('/log');
-        }
+        router.push('/log');
       }, 2000);
     } catch (err) {
-      if (err.code === 'auth/user-not-found') {
-        setError('No account found with this email address.');
-      } else if (err.code === 'auth/wrong-password') {
-        setError('Incorrect password.');
+      if (err.code === 'auth/email-already-in-use') {
+        setError('An account with this email already exists.');
       } else if (err.code === 'auth/invalid-email') {
         setError('Invalid email address.');
-      } else if (err.code === 'auth/too-many-requests') {
-        setError('Too many failed attempts. Please try again later.');
+      } else if (err.code === 'auth/weak-password') {
+        setError('Password is too weak. Please choose a stronger password.');
       } else {
-        setError(`Login failed: ${err.message}`);
+        setError(`Registration failed: ${err.message}`);
       }
     } finally {
       setIsLoading(false);
@@ -112,10 +94,36 @@ export default function LoginForm() {
   return (
     <div className="flex flex-col items-center">
       <div className="flex flex-col items-center mb-6">
-        <h2 className="text-2xl font-bold text-[#14206e] text-center mb-2">Sign in to your account</h2>
-        <p className="text-center text-sm text-gray-600">Welcome back! Please enter your credentials.</p>
+        <h2 className="text-2xl font-bold text-[#14206e] text-center mb-2">Create your account</h2>
+        <p className="text-center text-sm text-gray-600">Join DCPH: Anime and Manga</p>
       </div>
         <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <label htmlFor="name" className="block text-sm font-semibold text-[#14206e] mb-2 flex items-center">
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+              </svg>
+              Full Name
+            </label>
+            <div className="relative">
+              <input
+                id="name"
+                name="name"
+                type="text"
+                autoComplete="name"
+                required
+                className="block w-full px-4 py-4 pl-12 border-2 border-gray-200 rounded-xl text-[#14206e] placeholder-gray-400 bg-white focus:outline-none focus:ring-4 focus:ring-[#14206e]/20 focus:border-[#14206e] transition-all duration-300 text-base shadow-sm hover:border-gray-300"
+                placeholder="Enter your full name"
+                value={formData.name}
+                onChange={handleInputChange}
+              />
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                </svg>
+              </div>
+            </div>
+          </div>
           <div className="space-y-2">
             <label htmlFor="email" className="block text-sm font-semibold text-[#14206e] mb-2 flex items-center">
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -154,7 +162,7 @@ export default function LoginForm() {
                 id="password"
                 name="password"
                 type="password"
-                autoComplete="current-password"
+                autoComplete="new-password"
                 required
                 className="block w-full px-4 py-4 pl-12 border-2 border-gray-200 rounded-xl text-[#14206e] placeholder-gray-400 bg-white focus:outline-none focus:ring-4 focus:ring-[#14206e]/20 focus:border-[#14206e] transition-all duration-300 text-base shadow-sm hover:border-gray-300"
                 placeholder="Enter your password"
@@ -164,6 +172,32 @@ export default function LoginForm() {
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                 <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                </svg>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="confirmPassword" className="block text-sm font-semibold text-[#14206e] mb-2 flex items-center">
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              Confirm Password
+            </label>
+            <div className="relative">
+              <input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                autoComplete="new-password"
+                required
+                className="block w-full px-4 py-4 pl-12 border-2 border-gray-200 rounded-xl text-[#14206e] placeholder-gray-400 bg-white focus:outline-none focus:ring-4 focus:ring-[#14206e]/20 focus:border-[#14206e] transition-all duration-300 text-base shadow-sm hover:border-gray-300"
+                placeholder="Confirm your password"
+                value={formData.confirmPassword}
+                onChange={handleInputChange}
+              />
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
               </div>
             </div>
@@ -187,14 +221,14 @@ export default function LoginForm() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                Signing in...
+                Creating account...
               </>
             ) : (
               <>
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path>
                 </svg>
-                Sign in
+                Create account
               </>
             )}
           </button>
@@ -211,7 +245,7 @@ export default function LoginForm() {
               />
             </div>
             <h2 className="text-2xl font-bold text-[#14206e] mb-2 text-center">DCPH: Anime and Manga</h2>
-            <p className="text-gray-700 text-center mb-6">Please wait for us to redirect you to the dashboard.</p>
+            <p className="text-gray-700 text-center mb-6">Account created successfully! Redirecting to dashboard...</p>
             <div className="flex justify-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#14206e]"></div>
             </div>

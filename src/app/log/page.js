@@ -22,6 +22,7 @@ export default function LogPage() {
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
   const [alertType, setAlertType] = useState('error');
+  const [missedSchedulesCount, setMissedSchedulesCount] = useState(0);
   const router = useRouter();
 
   useEffect(() => {
@@ -96,6 +97,7 @@ export default function LogPage() {
   useEffect(() => {
     if (user) {
       checkClockInStatus();
+      checkAndLogMissedSchedules();
     }
   }, [user]);
 
@@ -107,12 +109,36 @@ export default function LogPage() {
       const clocklogRef = collection(userDocRef, 'clocklog');
 
       // Query for the latest clocklog where clockOut is null
-      const q = query(clocklogRef, where('clockOut', '==', null), orderBy('clockIn', 'desc'), limit(1));
+      // Use a simpler query to avoid composite index requirements
+      const q = query(clocklogRef, where('clockOut', '==', null));
       const querySnapshot = await getDocs(q);
+      
+      // Sort in JavaScript to get the latest entry
+      const sortedDocs = querySnapshot.docs.sort((a, b) => {
+        const aData = a.data();
+        const bData = b.data();
+        
+        let aTime, bTime;
+        try {
+          aTime = aData.clockIn?.toDate ? aData.clockIn.toDate() : new Date(aData.clockIn);
+        } catch (error) {
+          console.error('Error parsing aData.clockIn:', error);
+          aTime = new Date(0);
+        }
+        
+        try {
+          bTime = bData.clockIn?.toDate ? bData.clockIn.toDate() : new Date(bData.clockIn);
+        } catch (error) {
+          console.error('Error parsing bData.clockIn:', error);
+          bTime = new Date(0);
+        }
+        
+        return bTime - aTime; // Descending order
+      });
 
-      if (!querySnapshot.empty) {
+      if (sortedDocs.length > 0) {
         // There is an active clock-in session
-        const docSnap = querySnapshot.docs[0];
+        const docSnap = sortedDocs[0];
         setIsClockedIn(true);
         setCurrentClockInId(docSnap.id);
       } else {
@@ -121,6 +147,156 @@ export default function LogPage() {
       }
     } catch (error) {
       console.error('Error checking clock in status:', error);
+    }
+  };
+
+  const checkAndLogMissedSchedules = async () => {
+    try {
+      if (!auth.currentUser) return;
+      
+      const userUid = auth.currentUser.uid;
+      
+      // Check if we've already processed missed schedules for this session
+      const sessionKey = `missedSchedulesProcessed_${userUid}`;
+      const lastProcessed = localStorage.getItem(sessionKey);
+      const today = new Date().toDateString();
+      
+      if (lastProcessed === today) {
+        return; // Already processed today
+      }
+      
+      const userDocRef = doc(db, 'users', userUid);
+      
+      // Fetch user's schedule from users collection
+      const userDocSnap = await getDoc(userDocRef);
+      let allowedDay = null, allowedStartTime = null, allowedEndTime = null;
+      
+      if (userDocSnap.exists()) {
+        const userData = userDocSnap.data();
+        allowedDay = userData.allowedDay;
+        allowedStartTime = userData.allowedStartTime;
+        allowedEndTime = userData.allowedEndTime;
+      }
+      
+      // If not found in users collection, check admin collection
+      if ((!allowedDay || !allowedStartTime || !allowedEndTime) && user && user.type === 'admin') {
+        const adminDocRef = doc(db, 'admin', userUid);
+        const adminDocSnap = await getDoc(adminDocRef);
+        if (adminDocSnap.exists()) {
+          const adminData = adminDocSnap.data();
+          allowedDay = adminData.allowedDay;
+          allowedStartTime = adminData.allowedStartTime;
+          allowedEndTime = adminData.allowedEndTime;
+        }
+      }
+      
+      // If no schedule is set, skip
+      if (!allowedDay || !allowedStartTime || !allowedEndTime) return;
+      
+      const clocklogRef = collection(userDocRef, 'clocklog');
+      const now = new Date();
+      const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+      
+      // Get all existing logs for the allowed day to avoid multiple queries
+      const existingLogQuery = query(clocklogRef, where('day', '==', allowedDay));
+      const existingLogSnapshot = await getDocs(existingLogQuery);
+      const existingLogs = existingLogSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          ...data,
+          id: doc.id
+        };
+      });
+      
+      // Check the last 7 days for missed schedules
+      let missedCount = 0;
+      for (let i = 1; i <= 7; i++) {
+        const checkDate = new Date(now);
+        checkDate.setDate(checkDate.getDate() - i);
+        const dayOfWeek = daysOfWeek[checkDate.getDay()];
+        
+        // Only check if this day matches the allowed schedule and is not in the future
+        if (dayOfWeek === allowedDay && checkDate <= now) {
+          const dateString = checkDate.toISOString().split('T')[0];
+          
+          // Check if there's already a log for this date using the pre-fetched data
+          const hasLogForDate = existingLogs.some(log => {
+            if (!log.clockIn) return false;
+            
+            let logDate;
+            try {
+              logDate = log.clockIn.toDate ? log.clockIn.toDate() : new Date(log.clockIn);
+            } catch (error) {
+              console.error('Error parsing log date:', error);
+              return false;
+            }
+            
+            const checkDateStart = new Date(checkDate.getFullYear(), checkDate.getMonth(), checkDate.getDate(), 0, 0, 0);
+            const checkDateEnd = new Date(checkDate.getFullYear(), checkDate.getMonth(), checkDate.getDate() + 1, 0, 0, 0);
+            
+            return logDate >= checkDateStart && logDate < checkDateEnd;
+          });
+          
+          // If no log exists for this scheduled day, create a missed entry
+          if (!hasLogForDate) {
+            // Validate time format
+            const startTimeParts = allowedStartTime.split(':');
+            const endTimeParts = allowedEndTime.split(':');
+            
+            if (startTimeParts.length !== 2 || endTimeParts.length !== 2) {
+              console.error('Invalid time format:', { allowedStartTime, allowedEndTime });
+              continue;
+            }
+            
+            const [startHour, startMin] = startTimeParts.map(Number);
+            const [endHour, endMin] = endTimeParts.map(Number);
+            
+            // Validate time values
+            if (isNaN(startHour) || isNaN(startMin) || isNaN(endHour) || isNaN(endMin)) {
+              console.error('Invalid time values:', { startHour, startMin, endHour, endMin });
+              continue;
+            }
+            
+            // Create a timestamp for the scheduled start time
+            const scheduledStartTime = new Date(checkDate);
+            scheduledStartTime.setHours(startHour, startMin, 0, 0);
+            
+            // Create a timestamp for the scheduled end time
+            const scheduledEndTime = new Date(checkDate);
+            scheduledEndTime.setHours(endHour, endMin, 0, 0);
+            
+            // Create missed log entry
+            const missedLogData = {
+              clockIn: scheduledStartTime,
+              clockOut: scheduledEndTime,
+              day: allowedDay,
+              INstatus: 'Missed',
+              OUTstatus: 'Missed',
+              isMissedSchedule: true,
+              missedDate: dateString,
+              autoLogged: true,
+              loggedAt: serverTimestamp()
+            };
+            
+            await addDoc(clocklogRef, missedLogData);
+            console.log(`Auto-logged missed schedule for ${dateString}`);
+            missedCount++;
+          }
+        }
+      }
+      
+      // Show notification if missed schedules were logged
+      if (missedCount > 0) {
+        setMissedSchedulesCount(missedCount);
+        setAlertMessage(`${missedCount} missed schedule${missedCount > 1 ? 's' : ''} from the past week have been automatically logged.`);
+        setAlertType('info');
+        setAlertOpen(true);
+      }
+      
+      // Mark as processed for today
+      localStorage.setItem(sessionKey, today);
+    } catch (error) {
+      console.error('Error checking and logging missed schedules:', error);
     }
   };
 
@@ -543,6 +719,19 @@ export default function LogPage() {
                     {isClockedIn ? 'Active session in progress' : 'No active session'}
                   </p>
                 </div>
+                {missedSchedulesCount > 0 && (
+                  <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 p-6 rounded-xl border border-yellow-200 hover-lift">
+                    <h4 className="font-medium text-[#14206e] flex items-center">
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                      </svg>
+                    Missed Schedules
+                  </h4>
+                  <p className="text-[#14206e] text-sm mt-2">
+                    {missedSchedulesCount} missed schedule{missedSchedulesCount > 1 ? 's' : ''} auto-logged
+                  </p>
+                </div>
+                )}
               </div>
             </div>
             {/* Clock In/Out Section */}
@@ -824,7 +1013,12 @@ export default function LogPage() {
         open={alertOpen}
         message={alertMessage}
         type={alertType}
-        onClose={() => setAlertOpen(false)}
+        onClose={() => {
+          setAlertOpen(false);
+          if (alertType === 'info' && missedSchedulesCount > 0) {
+            setMissedSchedulesCount(0);
+          }
+        }}
       />
     </div>
   );

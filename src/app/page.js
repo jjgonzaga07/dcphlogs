@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import LoginForm from './components/LoginForm';
+import AuthContainer from './components/AuthContainer';
 
 export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -38,5 +38,5 @@ export default function Home() {
     return null; // Will redirect to /log
   }
 
-  return <LoginForm />;
+  return <AuthContainer />;
 }
