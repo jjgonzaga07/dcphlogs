@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import { auth, db } from '../../configs/firebaseConfigs';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import emailjs from 'emailjs-com';
+
+const LOGO_SRC = "/images/logo.PNG";
 
 export default function AuthContainer() {
   const [isLogin, setIsLogin] = useState(true);
@@ -144,6 +147,21 @@ export default function AuthContainer() {
         createdAt: serverTimestamp(),
         lastLogin: serverTimestamp()
       });
+
+      // Send welcome email using EmailJS
+      try {
+        await emailjs.send(
+          'service_5ue0n5s', // service ID
+          'template_docvx32', // template ID
+          {
+            to_email: formData.email,
+            to_name: formData.name,
+          },
+          'QGo25lR_CHh8kHoEg' // public key
+        );
+      } catch (emailError) {
+        console.error('EmailJS error:', emailError, emailError?.text, emailError?.status);
+      }
       
       // Store user info in localStorage
       localStorage.setItem('user', JSON.stringify({
@@ -190,7 +208,7 @@ export default function AuthContainer() {
           <div className="relative z-10">
             <div className={`${isLogin ? 'w-20 h-20 mb-4' : 'w-16 h-16 mb-3'} mx-auto hover-scale`}>
               <img 
-                src="/images/logo.PNG" 
+                src={LOGO_SRC}
                 alt="DCPH Logo" 
                 className="w-full h-full object-contain rounded-full border-2 border-white shadow-lg"
               />
