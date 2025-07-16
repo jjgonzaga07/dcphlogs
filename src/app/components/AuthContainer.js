@@ -151,13 +151,13 @@ export default function AuthContainer() {
       // Send welcome email using EmailJS
       try {
         await emailjs.send(
-          'service_5ue0n5s', // service ID
-          'template_docvx32', // template ID
+          process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID, // service ID
+          process.env.NEXT_PUBLIC_EMAILJS_TEMPLATE_ID, // template ID
           {
             to_email: formData.email,
             to_name: formData.name,
           },
-          'QGo25lR_CHh8kHoEg' // public key
+          process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY // public key
         );
       } catch (emailError) {
         console.error('EmailJS error:', emailError, emailError?.text, emailError?.status);
