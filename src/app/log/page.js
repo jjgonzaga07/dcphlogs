@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { auth, db } from '../../configs/firebaseConfigs';
 import { query, where, orderBy, limit, getDocs, collection, doc, setDoc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import ModalAlert from '../components/ModalAlert';
+import QRCodeModal from '../components/QRCodeModal';
+import Navigation from '../components/Navigation';
 
 export default function LogPage() {
   const [user, setUser] = useState(null);
@@ -23,6 +25,7 @@ export default function LogPage() {
   const [alertMessage, setAlertMessage] = useState('');
   const [alertType, setAlertType] = useState('error');
   const [missedSchedulesCount, setMissedSchedulesCount] = useState(0);
+  const [showQRCodeModal, setShowQRCodeModal] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -621,6 +624,10 @@ export default function LogPage() {
     setSauceNAOResults(null);
   };
 
+  const handleQRCodeClick = () => {
+    setShowQRCodeModal(true);
+  };
+
   const handleSauceNAOSearch = async () => {
     if (!imageUrl) return;
     setIsSearching(true);
@@ -668,7 +675,37 @@ export default function LogPage() {
       {/* Header */}
       <header className="bg-white shadow-lg border-b border-gray-200 sticky top-0 z-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row justify-between items-center py-6 gap-4">
+          {/* Mobile header layout */}
+          <div className="flex items-center justify-between py-4 md:hidden">
+            <div className="w-12 h-12 flex-shrink-0">
+              <img 
+                src="/images/logo.PNG" 
+                alt="DCPH Logo" 
+                className="w-full h-full object-contain rounded-full border-2 border-[#14206e] shadow-md"
+              />
+            </div>
+            <div className="flex-1 flex flex-col items-center justify-center">
+              <h1 className="text-[#14206e] font-bold leading-tight text-lg truncate text-center">
+                DCPH: Anime and Manga
+              </h1>
+              <p className="text-xs text-gray-600 mt-1 text-center">User Dashboard</p>
+            </div>
+            <div className="flex-shrink-0">
+              <Navigation
+                userName={userName}
+                onLogout={handleLogout}
+                onSauceNAOClick={handleSauceNAOClick}
+                onQRCodeClick={handleQRCodeClick}
+                currentPage="log"
+              />
+            </div>
+          </div>
+          {/* Mobile welcome greeting */}
+          <div className="md:hidden text-left text-sm text-gray-600 mb-2 pl-4">
+            Welcome, <span className="font-semibold text-[#14206e]">{userName || 'User'}</span>
+          </div>
+          {/* Desktop header layout */}
+          <div className="hidden md:flex flex-col md:flex-row justify-between items-center py-6 gap-4">
             <div className="flex items-center animate-slide-in-left">
               <div className="w-16 h-16 mr-4">
                 <img 
@@ -685,24 +722,16 @@ export default function LogPage() {
               </div>
             </div>
             <div className="flex items-center space-x-2 md:space-x-4 animate-slide-in-right">
-              <span className="text-sm text-gray-600">
+              <span className="text-sm text-gray-600 hidden md:block">
                 Welcome, <span className="font-semibold text-[#14206e]">{userName || 'User'}</span>
               </span>
-              <button
-                onClick={handleSauceNAOClick}
-                className="bg-[#14206e] hover:bg-[#1a2a8a] text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover-lift flex items-center"
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                </svg>
-                SauceNAO
-              </button>
-              <button
-                onClick={handleLogout}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover-lift"
-              >
-                Logout
-              </button>
+              <Navigation
+                userName={userName}
+                onLogout={handleLogout}
+                onSauceNAOClick={handleSauceNAOClick}
+                onQRCodeClick={handleQRCodeClick}
+                currentPage="log"
+              />
             </div>
           </div>
         </div>
@@ -1055,6 +1084,10 @@ export default function LogPage() {
             setMissedSchedulesCount(0);
           }
         }}
+      />
+      <QRCodeModal
+        isOpen={showQRCodeModal}
+        onClose={() => setShowQRCodeModal(false)}
       />
     </div>
   );

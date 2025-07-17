@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { db, auth } from '../../../configs/firebaseConfigs';
 import { collection, getDocs, doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import ModalAlert from '../../components/ModalAlert';
+import Navigation from '../../components/Navigation';
 import * as XLSX from 'xlsx';
 
 export default function UsersPage() {
@@ -184,38 +185,65 @@ export default function UsersPage() {
     <div className="min-h-screen bg-gradient-to-br from-white to-[#e6eaff]">
       {/* Header */}
       <header className="bg-white shadow-lg border-b border-gray-200 sticky top-0 z-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center animate-slide-in-left">
-            <div className="w-16 h-16 mr-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Mobile header layout */}
+          <div className="flex items-center justify-between py-4 md:hidden">
+            <div className="w-12 h-12 flex-shrink-0">
               <img 
                 src="/images/logo.PNG" 
                 alt="DCPH Logo" 
                 className="w-full h-full object-contain rounded-full border-2 border-[#14206e] shadow-md"
               />
             </div>
-            <div>
-              <h1 className="whitespace-nowrap truncate text-[#14206e] font-bold leading-tight" style={{ fontSize: 'clamp(1.25rem, 4vw, 2.25rem)' }}>
+            <div className="flex-1 flex flex-col items-center justify-center">
+              <h1 className="text-[#14206e] font-bold leading-tight text-lg truncate text-center">
                 DCPH: Anime and Manga
               </h1>
-              <p className="text-sm text-gray-600">User Management</p>
+              <p className="text-xs text-gray-600 mt-1 text-center">User Management</p>
+            </div>
+            <div className="flex-shrink-0">
+              <Navigation
+                admin={true}
+                onBackToLog={handleBackToDashboard}
+                onLogout={handleLogout}
+                userName="Admin!"
+                currentPage="admin-users"
+              />
             </div>
           </div>
-          <div className="flex items-center space-x-2 md:space-x-4 animate-slide-in-right">
-            <span className="text-sm text-gray-600">
-              Welcome, <span className="font-semibold text-[#14206e]">Admin!</span>
-            </span>
-            <button
-              onClick={handleBackToDashboard}
-              className="bg-[#14206e] hover:bg-[#0f1a5a] text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover-lift"
-            >
-              Back to Dashboard
-            </button>
-            <button
-              onClick={handleLogout}
-              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover-lift"
-            >
-              Logout
-            </button>
+          {/* Mobile welcome greeting */}
+          <div className="md:hidden text-left text-sm text-gray-600 mb-2 pl-4">
+            Welcome, <span className="font-semibold text-[#14206e]">Admin!</span>
+          </div>
+          {/* Desktop header layout */}
+          <div className="hidden md:flex flex-col md:flex-row justify-between items-center py-6 gap-4">
+            <div className="flex items-center animate-slide-in-left">
+              <div className="w-16 h-16 mr-4">
+                <img 
+                  src="/images/logo.PNG" 
+                  alt="DCPH Logo" 
+                  className="w-full h-full object-contain rounded-full border-2 border-[#14206e] shadow-md"
+                />
+              </div>
+              <div>
+                <h1 className="whitespace-nowrap truncate text-[#14206e] font-bold leading-tight" style={{ fontSize: 'clamp(1.25rem, 4vw, 2.25rem)' }}>
+                  DCPH: Anime and Manga
+                </h1>
+                <p className="text-sm text-gray-600">User Management</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2 md:space-x-4 animate-slide-in-right">
+              <span className="text-sm text-gray-600 hidden md:block">
+                Welcome, <span className="font-semibold text-[#14206e]">Admin!</span>
+              </span>
+              <Navigation
+                admin={true}
+                onBackToLog={handleBackToDashboard}
+                onLogout={handleLogout}
+                userName="Admin!"
+                currentPage="admin-users"
+              />
+            </div>
           </div>
         </div>
       </header>

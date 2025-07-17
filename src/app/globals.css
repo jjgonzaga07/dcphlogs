@@ -172,3 +172,29 @@ input[type="url"]::placeholder {
   color: #14206e !important;
   opacity: 1;
 }
+
+input[type="text"] {
+  color: #14206e !important;
+}
+
+input[type="text"]::placeholder {
+  color: #14206e !important;
+  opacity: 1;
+}
+
+input[type="search"]::placeholder {
+  color: #14206e !important;
+  opacity: 1;
+}
+
+select {
+  color: #14206e !important;
+}
+
+select option {
+  color: #14206e !important;
+}
+
+select:invalid {
+  color: #14206e !important;
+}
