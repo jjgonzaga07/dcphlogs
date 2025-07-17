@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { db, auth } from '../../configs/firebaseConfigs';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
+import RemarksChart from '../components/RemarksChart';
+import Navigation from '../components/Navigation';
 
 export default function AdminPage() {
   const [user, setUser] = useState(null);
@@ -14,6 +16,7 @@ export default function AdminPage() {
   const [search, setSearch] = useState('');
   const [dayFilter, setDayFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('');
+  const [showCharts, setShowCharts] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -156,42 +159,77 @@ export default function AdminPage() {
     <div className="min-h-screen bg-gradient-to-br from-white to-[#e6eaff]">
       {/* Header */}
       <header className="bg-white shadow-lg border-b border-gray-200 sticky top-0 z-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center animate-slide-in-left">
-            <div className="w-16 h-16 mr-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Mobile header layout */}
+          <div className="flex items-center justify-between py-4 md:hidden">
+            <div className="w-12 h-12 flex-shrink-0">
               <img 
                 src="/images/logo.PNG" 
                 alt="DCPH Logo" 
                 className="w-full h-full object-contain rounded-full border-2 border-[#14206e] shadow-md"
               />
             </div>
-            <div>
-              <h1 className="whitespace-nowrap truncate text-[#14206e] font-bold leading-tight" style={{ fontSize: 'clamp(1.25rem, 4vw, 2.25rem)' }}>
+            <div className="flex-1 flex flex-col items-center justify-center">
+              <h1 className="text-[#14206e] font-bold leading-tight text-lg truncate text-center">
                 DCPH: Anime and Manga
               </h1>
-              <p className="text-sm text-gray-600">Admin Dashboard</p>
+              <p className="text-xs text-gray-600 mt-1 text-center">Admin Dashboard</p>
+            </div>
+            <div className="flex-shrink-0">
+              <Navigation
+                admin={true}
+                showCharts={showCharts}
+                onShowCharts={() => setShowCharts(!showCharts)}
+                onViewUsers={() => router.push('/admin/users')}
+                onLogout={handleLogout}
+                userName="Admin!"
+              />
             </div>
           </div>
-          <div className="flex items-center space-x-2 md:space-x-4 animate-slide-in-right">
-            <span className="text-sm text-gray-600">
-              Welcome, <span className="font-semibold text-[#14206e]">Admin!</span>
-            </span>
-            <button
-              onClick={() => router.push('/admin/users')}
-              className="bg-[#14206e] hover:bg-[#0f1a5a] text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover-lift"
-            >
-              View Users
-            </button>
-            <button
-              onClick={handleLogout}
-              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover-lift"
-            >
-              Logout
-            </button>
+          {/* Mobile welcome greeting */}
+          <div className="md:hidden text-left text-sm text-gray-600 mb-2 pl-4">
+            Welcome, <span className="font-semibold text-[#14206e]">Admin!</span>
+          </div>
+          {/* Desktop header layout */}
+          <div className="hidden md:flex flex-col md:flex-row justify-between items-center py-6 gap-4">
+            <div className="flex items-center animate-slide-in-left">
+              <div className="w-16 h-16 mr-4">
+                <img 
+                  src="/images/logo.PNG" 
+                  alt="DCPH Logo" 
+                  className="w-full h-full object-contain rounded-full border-2 border-[#14206e] shadow-md"
+                />
+              </div>
+              <div>
+                <h1 className="whitespace-nowrap truncate text-[#14206e] font-bold leading-tight" style={{ fontSize: 'clamp(1.25rem, 4vw, 2.25rem)' }}>
+                  DCPH: Anime and Manga
+                </h1>
+                <p className="text-sm text-gray-600">Admin Dashboard</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2 md:space-x-4 animate-slide-in-right">
+              <span className="text-sm text-gray-600 hidden md:block">
+                Welcome, <span className="font-semibold text-[#14206e]">Admin!</span>
+              </span>
+              <Navigation
+                admin={true}
+                showCharts={showCharts}
+                onShowCharts={() => setShowCharts(!showCharts)}
+                onViewUsers={() => router.push('/admin/users')}
+                onLogout={handleLogout}
+                userName="Admin!"
+              />
+            </div>
           </div>
         </div>
       </header>
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 space-y-6">
+        {/* Charts Section */}
+        {showCharts && (
+          <RemarksChart clocklogs={filteredLogs} isFetchingData={isFetchingData} />
+        )}
+        
+        {/* Logs Table Section */}
         <div className="bg-white shadow-lg rounded-2xl p-8 overflow-x-auto animate-fade-in">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6 gap-4">
             {/* Search by Name */}
@@ -273,7 +311,7 @@ export default function AdminPage() {
             </div>
           )}
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
             <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-6 rounded-xl border border-blue-200 hover-lift">
               <div className="flex items-center">
                 <div className="flex-shrink-0">
@@ -356,6 +394,28 @@ export default function AdminPage() {
                         <div className="animate-shimmer h-6 bg-gray-200 rounded"></div>
                       ) : (
                         filteredLogs.length
+                      )}
+                    </dd>
+                  </dl>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-gradient-to-r from-indigo-50 to-indigo-100 p-6 rounded-xl border border-indigo-200 hover-lift">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <svg className="h-8 w-8 text-[#14206e]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                  </svg>
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Late Entries</dt>
+                    <dd className="text-lg font-medium text-[#14206e]">
+                      {isFetchingData ? (
+                        <div className="animate-shimmer h-6 bg-gray-200 rounded"></div>
+                      ) : (
+                        filteredLogs.filter(log => log.INstatus === 'Late').length
                       )}
                     </dd>
                   </dl>
